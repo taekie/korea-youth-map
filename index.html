@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>대한민국 시군구 청년 성별격차 지도 · 2026.06</title>
+<meta name="description" content="행정안전부 2026년 6월 주민등록인구 기준, 250개 시군구의 청년(20–39세) 성별격차·유소년 인구비율·고령화율·중위연령을 인터랙티브 지도로." />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="시군구 인구 지도" />
+<meta property="og:title" content="대한민국 시군구 청년 성별격차 지도" />
+<meta property="og:description" content="250개 시군구의 청년(20–39세) 성별격차, 유소년 인구비율, 고령화율을 인터랙티브 지도로 — 행안부 2026년 6월 주민등록인구." />
+<meta property="og:url" content="https://taekie.github.io/korea-youth-map/" />
+<meta property="og:image" content="https://taekie.github.io/korea-youth-map/og.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:locale" content="ko_KR" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="대한민국 시군구 청년 성별격차 지도" />
+<meta name="twitter:description" content="250개 시군구 청년 성별격차·유소년 비율·고령화율 인터랙티브 지도 (행안부 2026.06)." />
+<meta name="twitter:image" content="https://taekie.github.io/korea-youth-map/og.png" />
+<!-- Google Analytics (GA4) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-9P480FT8BY"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-9P480FT8BY');
+</script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson@3"></script>
+<style>
+@font-face{
+  font-family:'KoddiUD OnGothic';
+  src:url('fonts/KoddiUDOnGothic-Regular.otf') format('opentype');
+  font-weight:400; font-display:swap;
+}
+:root{
+  --bg:#ffffff; --panel:#f8fafc; --ink:#1f2937; --muted:#6b7280;
+  --line:#e5e7eb; --line2:#eef2f6; --accent:#3b82f6;
+  --male:#4a7fb5; --female:#e0795a;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;height:100%;}
+body{
+  font-family:'KoddiUD OnGothic',-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+  color:var(--ink); background:var(--bg);
+  -webkit-font-smoothing:antialiased;
+}
+a{color:var(--accent);}
+.app{display:flex;flex-direction:column;height:100vh;min-height:0;}
+header.top{padding:16px 22px 12px;border-bottom:1px solid var(--line);}
+header.top h1{font-size:19px;margin:0;letter-spacing:-.01em;}
+header.top .sub{font-size:12.5px;color:var(--muted);margin-top:4px;line-height:1.5;}
+header.top .sub b{color:var(--ink);font-weight:600;}
+.main{flex:1;display:flex;min-height:0;}
+.mapwrap{flex:1;position:relative;min-width:0;background:#fcfcfd;}
+#map{width:100%;height:100%;display:block;}
+.region{stroke:rgba(255,255,255,.5);stroke-width:.4px;cursor:pointer;vector-effect:non-scaling-stroke;}
+.region:hover{stroke:#111827;stroke-width:1.1px;}
+.region.sel{stroke:#111827;stroke-width:1.8px;}
+.sido-line{fill:none;stroke:#334155;stroke-width:1.1px;pointer-events:none;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke;}
+/* sidebar */
+.side{width:360px;flex:0 0 360px;border-left:1px solid var(--line);
+  display:flex;flex-direction:column;min-height:0;background:var(--bg);}
+.side .scroll{overflow-y:auto;padding:16px 18px 24px;}
+.seg{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;}
+.seg button{
+  font-family:inherit;font-size:12px;padding:7px 10px;border:1px solid var(--line);
+  background:#fff;color:var(--muted);border-radius:7px;cursor:pointer;letter-spacing:-.01em;}
+.seg button:hover{border-color:#cbd5e1;color:var(--ink);}
+.seg button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}
+.legend{margin:2px 0 18px;}
+.legend .lbar{height:12px;border-radius:3px;margin-bottom:5px;position:relative;}
+.legend .lax{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);}
+.legend .lcap{display:flex;justify-content:space-between;font-size:11px;color:var(--ink);margin-top:3px;font-weight:600;}
+.avgmark{position:absolute;top:-3px;bottom:-3px;width:2px;background:#0f172a;transform:translateX(-1px);border-radius:1px;}
+.avgmark::after{content:"";position:absolute;left:50%;top:-5px;transform:translateX(-50%);border-left:3.5px solid transparent;border-right:3.5px solid transparent;border-top:5px solid #0f172a;}
+.avgchk{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:11.5px;color:var(--muted);cursor:pointer;user-select:none;}
+.avgchk input{accent-color:var(--accent);width:14px;height:14px;cursor:pointer;margin:0;flex:0 0 auto;}
+.avgchk b{color:var(--ink);font-weight:700;}
+.searchbox{position:relative;margin-bottom:14px;}
+.searchbox input{width:100%;font-family:inherit;font-size:13px;padding:9px 11px;border:1px solid var(--line);
+  border-radius:8px;color:var(--ink);}
+.searchbox input:focus{outline:none;border-color:var(--accent);}
+.panel-title{font-size:11px;color:var(--muted);letter-spacing:.02em;text-transform:none;margin:0 0 2px;}
+.rname{font-size:20px;font-weight:700;letter-spacing:-.02em;margin:0;}
+.rsido{font-size:12.5px;color:var(--muted);margin:1px 0 12px;}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;}
+.stat{background:var(--panel);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;}
+.stat .k{font-size:10.5px;color:var(--muted);margin-bottom:3px;}
+.stat .v{font-size:17px;font-weight:700;letter-spacing:-.02em;}
+.stat .v small{font-size:11px;font-weight:500;color:var(--muted);margin-left:2px;}
+.stat.hero{grid-column:1/3;}
+.stat.hero .v{font-size:22px;}
+.badge{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;margin-left:6px;vertical-align:middle;}
+.badge.m{background:#e8f0f8;color:#1e5b96;}
+.badge.f{background:#fdecec;color:#b2182b;}
+.pyr-h{display:flex;justify-content:space-between;align-items:baseline;margin:6px 0 2px;}
+.pyr-h .t{font-size:12.5px;font-weight:600;}
+.pyr-h .lg{font-size:11px;color:var(--muted);}
+.pyr-h .lg i{font-style:normal;display:inline-block;width:9px;height:9px;border-radius:2px;vertical-align:-1px;margin:0 3px 0 8px;}
+#pyramid{width:100%;display:block;}
+.foot{font-size:10.5px;color:var(--muted);line-height:1.6;margin-top:16px;padding-top:12px;border-top:1px solid var(--line2);}
+/* tooltip */
+.tip{position:fixed;pointer-events:none;background:rgba(17,24,39,.94);color:#fff;font-size:12px;
+  padding:7px 10px;border-radius:7px;line-height:1.45;opacity:0;transition:opacity .08s;z-index:40;max-width:220px;}
+.tip b{font-weight:700;}
+.tip .tv{font-size:14px;font-weight:700;}
+.tip .ts{color:#cbd5e1;font-size:11px;}
+.hint{font-size:12px;color:var(--muted);background:var(--panel);border:1px dashed var(--line);
+  border-radius:9px;padding:12px;line-height:1.55;margin-bottom:14px;}
+.zbtns{position:absolute;left:14px;top:14px;display:flex;flex-direction:column;gap:6px;z-index:5;}
+.zbtns button{width:32px;height:32px;border:1px solid var(--line);background:#fff;border-radius:7px;
+  font-size:17px;color:var(--ink);cursor:pointer;line-height:1;box-shadow:0 1px 2px rgba(0,0,0,.04);}
+.zbtns button:hover{border-color:#cbd5e1;background:#f8fafc;}
+@media(max-width:860px){
+  .main{flex-direction:column;}
+  .side{width:100%;flex:0 0 auto;border-left:none;border-top:1px solid var(--line);max-height:52vh;}
+  .mapwrap{min-height:44vh;}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <h1>시군구별 청년(20–39세) 성별격차</h1>
+    <div class="sub">
+      남성 점유율 − 여성 점유율 (%p) · 자료: 행정안전부 주민등록인구 2026년 6월
+    </div>
+  </header>
+  <div class="main">
+    <div class="mapwrap">
+      <div class="zbtns"><button id="zin" title="확대">+</button><button id="zout" title="축소">−</button><button id="zreset" title="전체보기" style="font-size:13px">⤢</button></div>
+      <svg id="map"></svg>
+    </div>
+    <aside class="side">
+      <div class="scroll">
+        <div class="seg" id="seg"></div>
+        <div class="legend" id="legend"></div>
+        <div class="searchbox">
+          <input id="search" list="rlist" placeholder="시군구 검색 (예: 화천군, 강남구)" autocomplete="off"/>
+          <datalist id="rlist"></datalist>
+        </div>
+        <div id="detail"></div>
+        <div class="foot">
+          경계: 통계청 시군구 2018 기준(250개). 이후 행정경계 변화(예: 군위군 대구 편입, 인천 남구→미추홀구)는 반영해 매칭.
+          성비·고령화율·중위연령은 5세 연령구간 주민등록인구로 산출. 중위연령은 구간 선형보간 근사치.
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+<div class="tip" id="tip"></div>
+
+<script>
+const BANDS=["0–4","5–9","10–14","15–19","20–24","25–29","30–34","35–39","40–44","45–49","50–54","55–59","60–64","65–69","70–74","75–79","80–84","85–89","90–94","95–99","100+"];
+const fmtN=d3.format(","); const fmt1=d3.format(".1f");
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+// 성별격차(%p) = 남성 점유율 − 여성 점유율 = (남−여)/(남+여)×100. 0 중심 대칭.
+const fmtGap=v=> (v>=0?"+":"−")+fmt1(Math.abs(v))+"%p";
+const gapDir=v=> v>0.3?"남초":v<-0.3?"여초":"균형";
+
+// indicator configs
+const IND={
+  child_share:{label:"0–9세 인구비율", kind:"seq", interp:d3.interpolateGnBu, avgInterp:d3.interpolateBrBG,
+    unit:"%", fmt:v=>fmt1(v)+"%", capL:"낮음", capR:"높음", popKey:"child_pop", ageLabel:"0–9세"},
+  teen_share:{label:"10–19세 인구비율", kind:"seq", interp:d3.interpolateGnBu, avgInterp:d3.interpolateBrBG,
+    unit:"%", fmt:v=>fmt1(v)+"%", capL:"낮음", capR:"높음", popKey:"teen_pop", ageLabel:"10–19세"},
+  youth_gap:{label:"청년 성별격차 20–39", kind:"div", dom:[-20,0,20], interp:d3.interpolateRdBu, flip:true,
+    unit:"%p", fmt:fmtGap, capL:"여초", capR:"남초", ticks:[-20,-10,0,10,20],
+    tickfmt:v=>v===0?"0":Math.abs(v)},
+  overall_gap:{label:"전체 성별격차", kind:"div", dom:[-8,0,8], interp:d3.interpolateRdBu, flip:true,
+    unit:"%p", fmt:fmtGap, capL:"여초", capR:"남초", ticks:[-8,-4,0,4,8],
+    tickfmt:v=>v===0?"0":Math.abs(v)},
+  aging_rate:{label:"고령화율 65+", kind:"seq", interp:d3.interpolateYlOrRd, avgInterp:t=>d3.interpolateBrBG(1-t),
+    unit:"%", fmt:v=>fmt1(v)+"%", capL:"낮음", capR:"높음"},
+  median_age:{label:"중위연령", kind:"seq", interp:d3.interpolateBuPu, avgInterp:t=>d3.interpolateBrBG(1-t),
+    unit:"세", fmt:v=>fmt1(v)+"세", capL:"젊음", capR:"고령"},
+};
+
+let geo, feats, current="youth_gap", selected=null, natBands=null, sidoMesh=null, natProps=null, avgCenter=false;
+const svg=d3.select("#map"), tip=d3.select("#tip");
+const gAll=svg.append("g"), gRegions=gAll.append("g"), gSido=gAll.append("g");
+let path, proj, zoom, W, H;
+
+// fix polygon winding for d3 spherical fill (reverse rings whose feature area > hemisphere)
+function rewind(g){
+  g.features.forEach(f=>{
+    if(!f.geometry) return;
+    if(d3.geoArea(f) > 2*Math.PI){
+      const gm=f.geometry;
+      const polys = gm.type==="Polygon"? [gm.coordinates] : gm.type==="MultiPolygon"? gm.coordinates : [];
+      polys.forEach(poly=>poly.forEach(ring=>ring.reverse()));
+    }
+  });
+}
+
+d3.json("sigungu_pop.geojson").then(g=>{
+  rewind(g);
+  geo=g; feats=g.features.filter(f=>f.properties.total);
+  natBands={m:BANDS.map(()=>0),f:BANDS.map(()=>0)};
+  feats.forEach(f=>f.properties.m.forEach((v,i)=>{natBands.m[i]+=v;natBands.f[i]+=f.properties.f[i];}));
+  feats.forEach(ft=>{const q=ft.properties;
+    q.youth_gap=(q.youth_m+q.youth_f)?(q.youth_m-q.youth_f)/(q.youth_m+q.youth_f)*100:null;
+    q.overall_gap=(q.m_total+q.f_total)?(q.m_total-q.f_total)/(q.m_total+q.f_total)*100:null;
+    q.child_pop=d3.sum(q.m.slice(0,2))+d3.sum(q.f.slice(0,2)); q.child_share=q.total?q.child_pop/q.total*100:null;
+    q.teen_pop=d3.sum(q.m.slice(2,4))+d3.sum(q.f.slice(2,4)); q.teen_share=q.total?q.teen_pop/q.total*100:null;});
+  // 시도(도) 경계 mesh: 인접 시군구의 시도가 다른 아크 + 외곽선
+  try{
+    const topo=topojson.topology({s:geo});
+    sidoMesh=topojson.mesh(topo, topo.objects.s, (a,b)=>a===b||a.properties.sido!==b.properties.sido);
+  }catch(err){console.warn("sido mesh 실패",err);}
+  natProps=nationalProps();
+  buildSeg(); buildSearch(); setupMap(); render();
+  showDetail(null);
+  window.addEventListener("resize",()=>{setupMap();render();if(selected)zoomTo(selected,false);});
+});
+
+function setupMap(){
+  const wrap=document.querySelector(".mapwrap");
+  W=wrap.clientWidth; H=wrap.clientHeight;
+  svg.attr("width",W).attr("height",H);
+  proj=d3.geoMercator().fitExtent([[14,14],[W-14,H-14]],geo);
+  path=d3.geoPath(proj);
+  if(!zoom){
+    zoom=d3.zoom().scaleExtent([1,14]).on("zoom",e=>gAll.attr("transform",e.transform));
+    svg.call(zoom).on("dblclick.zoom",null);
+    svg.on("click",()=>{ if(selected){selected=null;render();showDetail(null);} });
+    d3.select("#zin").on("click",()=>svg.transition().duration(250).call(zoom.scaleBy,1.6));
+    d3.select("#zout").on("click",()=>svg.transition().duration(250).call(zoom.scaleBy,1/1.6));
+    d3.select("#zreset").on("click",()=>{selected=null;d3.select("#search").property("value","");svg.call(zoom.transform,d3.zoomIdentity);render();showDetail(null);});
+  }
+}
+
+function colorScale(key){
+  const c=IND[key];
+  const avg=(natProps && natProps[key]!=null)?natProps[key]:null;
+  if(c.kind==="div"){
+    const center=(avgCenter && avg!=null)?avg:c.dom[1];
+    const s=d3.scaleDiverging(c.interp).domain([c.dom[0],center,c.dom[2]]);
+    return v=>v==null?"#e5e7eb":s(clamp(v,c.dom[0],c.dom[2]));}
+  const vals=feats.map(f=>f.properties[key]).filter(v=>v!=null);
+  c._ext=[d3.min(vals),d3.max(vals)];
+  if(avgCenter && avg!=null){  // 순차 지표 → 전국평균 중심 발산 스케일
+    const s=d3.scaleDiverging(c.avgInterp||d3.interpolateRdBu).domain([c._ext[0],avg,c._ext[1]]);
+    return v=>v==null?"#e5e7eb":s(clamp(v,c._ext[0],c._ext[1]));}
+  const s=d3.scaleSequential(c.interp).domain(c._ext);
+  return v=>v==null?"#e5e7eb":s(v);
+}
+
+function render(){
+  const key=current, col=colorScale(key);
+  const sel=gRegions.selectAll("path.region").data(feats,d=>d.properties.code||d.properties.name+d.properties.sido);
+  sel.join(
+    enter=>enter.append("path").attr("class","region")
+      .on("mousemove",onHover).on("mouseleave",()=>tip.style("opacity",0))
+      .on("click",(e,d)=>{e.stopPropagation();selected=d;render();showDetail(d);}),
+    u=>u, x=>x.remove())
+    .attr("d",path)
+    .attr("fill",d=>col(d.properties[key]))
+    .classed("sel",d=>d===selected);
+  // 시도(도) 경계를 진하게
+  gSido.selectAll("path").data(sidoMesh?[sidoMesh]:[]).join("path").attr("class","sido-line").attr("d",path);
+  drawLegend();
+}
+
+function onHover(e,d){
+  const p=d.properties, c=IND[current], v=p[current];
+  const isGap=current.indexOf("gap")>=0, isYouth=current==="youth_gap";
+  // 어두운 툴팁 배경용 밝은 톤: 남초=파랑, 여초=빨강
+  const gc = v>0.3?"#7cb3ef":v<-0.3?"#f2a0a0":"#cbd5e1";
+  const val = v==null ? "–"
+    : isGap ? `<span style="color:${gc};font-weight:700">${c.fmt(v)} · ${gapDir(v)}</span>`
+    : c.fmt(v);
+  const sub = isGap
+    ? `${isYouth?"청년 ":""}남 ${fmtN(isYouth?p.youth_m:p.m_total)} · 여 ${fmtN(isYouth?p.youth_f:p.f_total)}`
+    : c.popKey ? `${c.ageLabel} ${fmtN(p[c.popKey])} · 총 ${fmtN(p.total)}`
+    : `총인구 ${fmtN(p.total)}`;
+  tip.style("opacity",1).style("left",(e.clientX+14)+"px").style("top",(e.clientY+12)+"px")
+    .html(`<b>${p.sido} ${p.name}</b><div class="tv">${c.label} · ${val}</div><div class="ts">${sub}</div>`);
+}
+
+function zoomTo(d,animate){
+  const [[x0,y0],[x1,y1]]=path.bounds(d);
+  const dx=x1-x0, dy=y1-y0, cx=(x0+x1)/2, cy=(y0+y1)/2;
+  // instant transform (transitioned zoom.transform can produce NaN via interpolateZoom); cap scale, keep context
+  const k=Math.max(1, Math.min(6, .5/Math.max(dx/W,dy/H)));
+  const t=d3.zoomIdentity.translate(W/2,H/2).scale(k).translate(-cx,-cy);
+  svg.call(zoom.transform,t);
+}
+
+// ---------- legend ----------
+function drawLegend(){
+  const c=IND[current], el=d3.select("#legend"); el.html("");
+  const N=64, col=colorScale(current), flip=!!c.flip;
+  let dom;
+  if(c.kind==="div") dom=[c.dom[0],c.dom[2]]; else dom=c._ext;
+  const stops=d3.range(N).map(i=>{
+    const t=i/(N-1), v=flip?dom[1]-t*(dom[1]-dom[0]):dom[0]+t*(dom[1]-dom[0]);
+    return `${col(v)} ${Math.round(t*100)}%`;});
+  const lbar=el.append("div").attr("class","lbar").style("background",`linear-gradient(90deg,${stops.join(",")})`);
+  // 전국평균 마커
+  const avg = natProps ? natProps[current] : null;
+  if(avg!=null){
+    let t = flip ? (dom[1]-avg)/(dom[1]-dom[0]) : (avg-dom[0])/(dom[1]-dom[0]);
+    lbar.append("div").attr("class","avgmark").style("left",(Math.max(0,Math.min(1,t))*100)+"%");
+  }
+  const ax=el.append("div").attr("class","lax");
+  if(c.kind==="div"){ const tk=c.ticks||[dom[0],c.dom[1],dom[1]]; (flip?tk.slice().reverse():tk).forEach(t=>ax.append("span").text(c.tickfmt?c.tickfmt(t):t)); }
+  else { ax.append("span").text(fmt1(dom[0])+c.unit); ax.append("span").text(fmt1((dom[0]+dom[1])/2)+c.unit); ax.append("span").text(fmt1(dom[1])+c.unit); }
+  const cap=el.append("div").attr("class","lcap");
+  const Lt=flip?c.capR:c.capL, Lc=flip?"#1e5b96":"#b2182b";
+  const Rt=flip?c.capL:c.capR, Rc=flip?"#b2182b":"#1e5b96";
+  cap.append("span").style("color",Lc).text("◀ "+Lt);
+  cap.append("span").style("color",Rc).text(Rt+" ▶");
+  if(c.kind!=="div"){cap.select("span:first-child").style("color","var(--muted)");cap.select("span:last-child").style("color","var(--ink)");}
+  if(avg!=null){
+    const wrap=el.append("label").attr("class","avgchk");
+    wrap.append("input").attr("type","checkbox").property("checked",avgCenter)
+      .on("change",function(){avgCenter=this.checked; render();});
+    wrap.append("span").html(`전국평균 <b>${c.fmt(avg)}</b> 기준`);
+  }
+}
+
+// ---------- segmented control ----------
+function buildSeg(){
+  const seg=d3.select("#seg");
+  Object.entries(IND).forEach(([k,c])=>{
+    seg.append("button").attr("class",k===current?"on":"").text(c.label)
+      .on("click",function(){current=k;selected=selected;
+        seg.selectAll("button").classed("on",false);d3.select(this).classed("on",true);
+        render(); if(selected)showDetail(selected);});
+  });
+}
+
+// ---------- search ----------
+function buildSearch(){
+  const dl=d3.select("#rlist");
+  feats.slice().sort((a,b)=>d3.ascending(a.properties.sido+a.properties.name,b.properties.sido+b.properties.name))
+    .forEach(f=>dl.append("option").attr("value",`${f.properties.sido} ${f.properties.name}`));
+  d3.select("#search").on("change",function(){
+    const q=this.value.trim();
+    const f=feats.find(x=>`${x.properties.sido} ${x.properties.name}`===q)||feats.find(x=>x.properties.name===q);
+    if(f){selected=f;zoomTo(f,true);render();showDetail(f);}
+  });
+}
+
+// ---------- 전국 집계 ----------
+function medianAge(m,f){
+  const lo=[0,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95,100];
+  const tot=m.map((v,i)=>v+f[i]), N=d3.sum(tot); let c=0;
+  for(let i=0;i<tot.length;i++){ if(c+tot[i]>=N/2) return lo[i]+(N/2-c)/tot[i]*5; c+=tot[i]; }
+  return null;
+}
+function nationalProps(){
+  const m=natBands.m, f=natBands.f;
+  const ym=d3.sum(m.slice(4,8)), yf=d3.sum(f.slice(4,8));
+  const mt=d3.sum(m), ft=d3.sum(f), tot=mt+ft, old=d3.sum(m.slice(13))+d3.sum(f.slice(13));
+  const cp=d3.sum(m.slice(0,2))+d3.sum(f.slice(0,2)), tp=d3.sum(m.slice(2,4))+d3.sum(f.slice(2,4));
+  return {name:"전국", m, f, youth_m:ym, youth_f:yf, m_total:mt, f_total:ft, total:tot,
+    youth_gap:(ym+yf)?(ym-yf)/(ym+yf)*100:null,
+    overall_gap:(mt+ft)?(mt-ft)/(mt+ft)*100:null,
+    child_pop:cp, child_share:tot?cp/tot*100:null, teen_pop:tp, teen_share:tot?tp/tot*100:null,
+    aging_rate:tot?old/tot*100:null, median_age:medianAge(m,f)};
+}
+
+// ---------- detail panel + pyramid ----------
+function showDetail(d){
+  const el=d3.select("#detail"), isNat=!d, p=isNat?natProps:d.properties;
+  const g=p.youth_gap, male=g>=0;
+  const gapC=g>0.3?"#1e5b96":g<-0.3?"#b2182b":"#334155";
+  el.html(`
+    <h2 class="rname">${p.name}<span class="badge ${male?'m':'f'}">${gapDir(g)}</span></h2>
+    <div class="rsido">${isNat?"대한민국 · 250개 시군구":(p.sido_disp||p.sido)}</div>
+    <div class="stats">
+      <div class="stat"><div class="k">총인구</div><div class="v">${fmtN(p.total)}<small>명</small></div></div>
+      <div class="stat"><div class="k">청년(20–39) 성별격차</div><div class="v" style="color:${gapC}">${fmtGap(g)}<small>${gapDir(g)}</small></div></div>
+      <div class="stat"><div class="k">고령화율(65+)</div><div class="v">${fmt1(p.aging_rate)}<small>%</small></div></div>
+      <div class="stat"><div class="k">중위연령</div><div class="v">${fmt1(p.median_age)}<small>세</small></div></div>
+    </div>
+    <div class="pyr-h"><span class="t">${isNat?"전국 인구 피라미드":"인구 피라미드"}</span>
+      <span class="lg"><i style="background:var(--male)"></i>남<i style="background:var(--female)"></i>여${isNat?"":'<span style="margin-left:8px;color:#94a3b8">┈ 전국</span>'}</span></div>
+    <svg id="pyramid"></svg>`);
+  drawPyramid(p,isNat);
+}
+
+function drawPyramid(p, isNat){
+  const cw=(document.querySelector('#detail')||{}).clientWidth||320;
+  const w=Math.max(260,cw), gap=30, colw=(w-gap)/2, rowH=13, padT=6, padB=18;
+  const h=BANDS.length*rowH+padT+padB;
+  const s=d3.select("#pyramid").attr("width",w).attr("height",h);
+  const tot=d3.sum(p.m)+d3.sum(p.f);
+  const mPct=p.m.map(v=>v/tot*100), fPct=p.f.map(v=>v/tot*100);
+  const natTot=d3.sum(natBands.m)+d3.sum(natBands.f);
+  const nmPct=natBands.m.map(v=>v/natTot*100), nfPct=natBands.f.map(v=>v/natTot*100);
+  const maxV=d3.max([...mPct,...fPct,...(isNat?[]:[...nmPct,...nfPct])])*1.05;
+  const y=d3.scaleBand().domain(d3.range(BANDS.length).reverse()).range([padT,h-padB]).padding(.18);
+  const xL=d3.scaleLinear().domain([0,maxV]).range([colw,0]);
+  const xR=d3.scaleLinear().domain([0,maxV]).range([0,colw]);
+  const cx=colw, cxR=colw+gap, bh=y.bandwidth();
+  // youth band highlight (20–39 => idx 4..7)
+  [4,5,6,7].forEach(i=>{
+    s.append("rect").attr("x",0).attr("y",y(i)-y.step()*.09).attr("width",w).attr("height",bh+y.step()*.18)
+      .attr("fill","#eff4fb");
+  });
+  // bars: 공통(진한색) + 초과분(연한색)
+  d3.range(BANDS.length).forEach(i=>{
+    const mi=mPct[i], fi=fPct[i], lo=Math.min(mi,fi), yy=y(i);
+    s.append("rect").attr("x",xL(lo)).attr("y",yy).attr("width",cx-xL(lo)).attr("height",bh).attr("fill","var(--male)");
+    if(mi>fi) s.append("rect").attr("x",xL(mi)).attr("y",yy).attr("width",xL(lo)-xL(mi)).attr("height",bh).attr("fill","var(--male)").attr("fill-opacity",.42);
+    s.append("rect").attr("x",cxR).attr("y",yy).attr("width",xR(lo)).attr("height",bh).attr("fill","var(--female)");
+    if(fi>mi) s.append("rect").attr("x",cxR+xR(lo)).attr("y",yy).attr("width",xR(fi)-xR(lo)).attr("height",bh).attr("fill","var(--female)").attr("fill-opacity",.42);
+  });
+  // national reference outline (전국 프로필)
+  if(!isNat){
+    const lineGen=(pct,xs,ox,dir)=>"M"+pct.map((v,i)=>`${ox+dir*xs(v)},${y(i)+bh/2}`).join("L");
+    s.append("path").attr("d",lineGen(nmPct,v=>colw-xL(v),cx,-1)).attr("fill","none")
+      .attr("stroke","#94a3b8").attr("stroke-width",1).attr("stroke-dasharray","2,2").attr("opacity",.9);
+    s.append("path").attr("d",lineGen(nfPct,xR,cxR,1)).attr("fill","none")
+      .attr("stroke","#94a3b8").attr("stroke-width",1).attr("stroke-dasharray","2,2").attr("opacity",.9);
+  }
+  // age labels (center) — 구간 시작 나이만 (0·5·10 …)
+  s.append("g").selectAll("text").data(BANDS).join("text")
+    .attr("x",colw+gap/2).attr("y",(_,i)=>y(i)+bh/2+3).attr("text-anchor","middle")
+    .attr("font-size",8).attr("fill",(_,i)=>(i>=4&&i<=7)?"#1e5b96":"#94a3b8")
+    .attr("font-weight",(_,i)=>(i>=4&&i<=7)?600:400)
+    .text(d=>String(d).split("–")[0].replace("+",""));
+  // axis caption
+  s.append("text").attr("x",2).attr("y",h-6).attr("font-size",9).attr("fill","#94a3b8").text("남 %");
+  s.append("text").attr("x",w-2).attr("y",h-6).attr("text-anchor","end").attr("font-size",9).attr("fill","#94a3b8").text("여 %");
+}
+</script>
+</body>
+</html>

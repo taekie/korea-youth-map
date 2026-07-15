@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson@3"></script>
+<style>
+@font-face{font-family:'KoddiUD OnGothic';src:url('fonts/KoddiUDOnGothic-Regular.otf') format('opentype');font-weight:400;}
+*{box-sizing:border-box;margin:0;}
+body{font-family:'KoddiUD OnGothic',-apple-system,sans-serif;color:#1f2937;}
+#poster{width:1200px;height:630px;background:#ffffff;display:flex;overflow:hidden;position:relative;}
+.mapcol{width:600px;height:630px;position:relative;background:#fcfcfd;}
+#map{width:100%;height:100%;display:block;}
+.region{stroke:rgba(255,255,255,.5);stroke-width:.5px;vector-effect:non-scaling-stroke;}
+.sido-line{fill:none;stroke:#334155;stroke-width:1.1px;stroke-linejoin:round;vector-effect:non-scaling-stroke;}
+.txtcol{flex:1;padding:64px 56px;display:flex;flex-direction:column;justify-content:center;}
+.kicker{font-size:19px;color:#3b82f6;font-weight:700;letter-spacing:.02em;margin-bottom:14px;}
+h1{font-size:52px;line-height:1.15;letter-spacing:-.02em;margin-bottom:20px;}
+.sub{font-size:20px;color:#6b7280;line-height:1.5;margin-bottom:34px;}
+.lbar{height:16px;border-radius:4px;margin-bottom:8px;}
+.lcap{display:flex;justify-content:space-between;font-size:16px;font-weight:700;}
+.src{font-size:15px;color:#94a3b8;margin-top:34px;}
+</style>
+</head>
+<body>
+<div id="poster">
+  <div class="mapcol"><svg id="map"></svg></div>
+  <div class="txtcol">
+    <div class="kicker">시군구 인구 지도 · 250개 시군구</div>
+    <h1>청년 성별격차로 본<br>대한민국</h1>
+    <div class="sub">청년(20–39세) 남성 점유율 − 여성 점유율.<br>지방·군지역 남초, 대도시 도심 여초.</div>
+    <div class="lbar" id="lbar"></div>
+    <div class="lcap"><span style="color:#1e5b96">◀ 남초</span><span style="color:#b2182b">여초 ▶</span></div>
+    <div class="src">자료: 행정안전부 주민등록인구 2026년 6월</div>
+  </div>
+</div>
+<script>
+const GSIDO={"11":"서울","21":"부산","22":"대구","23":"인천","24":"광주","25":"대전","26":"울산","29":"세종","31":"경기","32":"강원","33":"충북","34":"충남","35":"전북","36":"전남","37":"경북","38":"경남","39":"제주"};
+const col=d3.scaleDiverging(d3.interpolateRdBu).domain([-20,0,20]);
+const cl=v=>v==null?"#e5e7eb":col(Math.max(-20,Math.min(20,v)));
+d3.json("sigungu_pop.geojson").then(g=>{
+  g.features.forEach(f=>{ if(f.geometry && d3.geoArea(f)>2*Math.PI){
+    (f.geometry.type==="Polygon"?[f.geometry.coordinates]:f.geometry.coordinates).forEach(p=>p.forEach(r=>r.reverse())); }});
+  const svg=d3.select("#map"), W=600,H=630;
+  svg.attr("width",W).attr("height",H);
+  const proj=d3.geoMercator().fitExtent([[20,24],[W-20,H-24]],g);
+  const path=d3.geoPath(proj);
+  const gap=p=>(p.youth_m+p.youth_f)?(p.youth_m-p.youth_f)/(p.youth_m+p.youth_f)*100:null;
+  svg.append("g").selectAll("path").data(g.features.filter(f=>f.properties.total)).join("path")
+    .attr("class","region").attr("d",path).attr("fill",d=>cl(gap(d.properties)));
+  const topo=topojson.topology({s:g});
+  const mesh=topojson.mesh(topo,topo.objects.s,(a,b)=>a===b||a.properties.sido!==b.properties.sido);
+  svg.append("path").datum(mesh).attr("class","sido-line").attr("d",path);
+  // legend gradient (flipped: 남초 left)
+  const stops=d3.range(64).map(i=>{const t=i/63,v=20-t*40;return `${cl(v)} ${Math.round(t*100)}%`;});
+  document.getElementById("lbar").style.background=`linear-gradient(90deg,${stops.join(",")})`;
+  document.title="OG_READY";
+});
+</script>
+</body>
+</html>
