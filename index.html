@@ -167,6 +167,8 @@ const IND={
     unit:"%", fmt:v=>fmt1(v)+"%", capL:"낮음", capR:"높음", popKey:"child_pop", ageLabel:"0–9세"},
   teen_share:{label:"10–19세 인구비율", kind:"seq", interp:d3.interpolateGnBu, avgInterp:d3.interpolateBrBG,
     unit:"%", fmt:v=>fmt1(v)+"%", capL:"낮음", capR:"높음", popKey:"teen_pop", ageLabel:"10–19세"},
+  youth_share:{label:"20–39세 인구비율", kind:"seq", interp:d3.interpolateGnBu, avgInterp:d3.interpolateBrBG,
+    unit:"%", fmt:v=>fmt1(v)+"%", capL:"낮음", capR:"높음", popKey:"youth_pop", ageLabel:"20–39세"},
   youth_gap:{label:"청년 성별격차 20–39", kind:"div", dom:[-20,0,20], interp:d3.interpolateRdBu, flip:true,
     unit:"%p", fmt:fmtGap, capL:"여초", capR:"남초", ticks:[-20,-10,0,10,20],
     tickfmt:v=>v===0?"0":Math.abs(v)},
@@ -205,7 +207,8 @@ d3.json("sigungu_pop.geojson").then(g=>{
     q.youth_gap=(q.youth_m+q.youth_f)?(q.youth_m-q.youth_f)/(q.youth_m+q.youth_f)*100:null;
     q.overall_gap=(q.m_total+q.f_total)?(q.m_total-q.f_total)/(q.m_total+q.f_total)*100:null;
     q.child_pop=d3.sum(q.m.slice(0,2))+d3.sum(q.f.slice(0,2)); q.child_share=q.total?q.child_pop/q.total*100:null;
-    q.teen_pop=d3.sum(q.m.slice(2,4))+d3.sum(q.f.slice(2,4)); q.teen_share=q.total?q.teen_pop/q.total*100:null;});
+    q.teen_pop=d3.sum(q.m.slice(2,4))+d3.sum(q.f.slice(2,4)); q.teen_share=q.total?q.teen_pop/q.total*100:null;
+    q.youth_pop=q.youth_m+q.youth_f; q.youth_share=q.total?q.youth_pop/q.total*100:null;});
   // 시도(도) 경계 mesh: 인접 시군구의 시도가 다른 아크 + 외곽선
   try{
     const topo=topojson.topology({s:geo});
@@ -362,6 +365,7 @@ function nationalProps(){
     youth_gap:(ym+yf)?(ym-yf)/(ym+yf)*100:null,
     overall_gap:(mt+ft)?(mt-ft)/(mt+ft)*100:null,
     child_pop:cp, child_share:tot?cp/tot*100:null, teen_pop:tp, teen_share:tot?tp/tot*100:null,
+    youth_pop:ym+yf, youth_share:tot?(ym+yf)/tot*100:null,
     aging_rate:tot?old/tot*100:null, median_age:medianAge(m,f)};
 }
 
