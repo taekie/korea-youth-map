@@ -232,6 +232,33 @@ const GROUPS=[
 ];
 // 연도별 애니메이션 가능한 지표 (전역 연도 슬라이더가 제어)
 const TIME_KEYS=new Set(["child_share","teen_share","youth_share","youth_gap","overall_gap","aging_rate","median_age","ts_fidx","ts_pidx"]);
+// 지표별 제목(t)·부제(d)
+const TITLES={
+  child_share:{t:"0–9세 인구비율", d:"총인구 대비 0–9세 비율 (%)"},
+  teen_share:{t:"10–19세 인구비율", d:"총인구 대비 10–19세 비율 (%)"},
+  youth_share:{t:"청년(20–39세) 인구비율", d:"총인구 대비 20–39세 비율 (%)"},
+  youth_gap:{t:"청년(20–39세) 성별격차", d:"남성 점유율 − 여성 점유율 (%p)"},
+  overall_gap:{t:"전체 성별격차", d:"남성 점유율 − 여성 점유율 (%p)"},
+  aging_rate:{t:"고령화율", d:"총인구 대비 65세 이상 비율 (%)"},
+  median_age:{t:"중위연령", d:"인구를 나이순 정렬한 중앙값 (세)"},
+  chg_youth:{t:"청년 인구 10년 변화", d:"2016 대비 2026 청년(20–39) 인구 증감률 (%)"},
+  chg_youth_f:{t:"청년 여성 10년 변화", d:"2016 대비 2026 청년 여성 증감률 (%)"},
+  chg_youth_m:{t:"청년 남성 10년 변화", d:"2016 대비 2026 청년 남성 증감률 (%)"},
+  chg_gap:{t:"청년 성별격차 10년 변화", d:"2016 대비 2026 성별격차 변화 (%p)"},
+  ts_fidx:{t:"청년 여성 지수", d:"2016년=100 기준 청년 여성 인구 지수"},
+  ts_pidx:{t:"청년 인구 지수", d:"2016년=100 기준 청년(20–39) 인구 지수"},
+};
+function updateTitle(){
+  const h1=d3.select("header.top h1"), sub=d3.select("header.top .sub"), src="자료: 행정안전부 주민등록인구";
+  if(viewMode==="scatter"){ h1.text("청년 인구비율 × 성별격차 · 산점도");
+    sub.html(`x=청년(20–39) 인구비율 · y=성별격차 · 원=총인구 · 색=수도권/지방 · ${src} 2026년 6월`); return; }
+  if(viewMode==="bivariate"){ h1.text("청년 인구비율 × 성별격차 · 이변량 지도");
+    sub.html(`청년 인구비율(↑) × 성별격차(여초→남초) · ${src} 2026년 6월`); return; }
+  const t=TITLES[current]||{t:IND[current].label,d:""}, isChg=current.indexOf("chg")===0, ta=TIME_KEYS.has(current);
+  h1.text("시군구별 "+t.t+(ta?` · ${year}년`:""));
+  const sy=isChg?"2016 → 2026년 6월":(ta?`${year}년 6월`:"2026년 6월");
+  sub.html(`${t.d} · ${src} ${sy}`);
+}
 
 let geo, feats, current="youth_gap", selected=null, natBands=null, sidoMesh=null, natProps=null, avgCenter=false;
 let year=2026, playing=false, playTimer=null;
@@ -320,7 +347,7 @@ function colorScale(key){
 }
 
 function render(){
-  updateYearCtl();
+  updateYearCtl(); updateTitle();
   if(viewMode==="scatter"){ drawScatter(); drawScatterLegend(); return; }
   const key=current, biv=viewMode==="bivariate", col=colorScale(key);
   const sel=gRegions.selectAll("path.region").data(feats,d=>d.properties.code||d.properties.name+d.properties.sido);
@@ -346,7 +373,7 @@ function paintFills(animate){
 function setYear(y,animate){
   year=Math.max(YEARS[0],Math.min(YEARS[YEARS.length-1],y));
   d3.select("#yearlbl").text(year); d3.select("#yearslider").property("value",year);
-  paintFills(animate);
+  paintFills(animate); updateTitle();
 }
 function stopPlay(){ playing=false; if(playTimer){clearInterval(playTimer);playTimer=null;} d3.select("#playbtn").html("▶"); }
 function togglePlay(){
