@@ -256,7 +256,7 @@ function rewind(g){
   });
 }
 
-d3.json("sigungu_pop.geojson").then(g=>{
+d3.json("sigungu_pop.geojson?v=20260718").then(g=>{
   rewind(g);
   geo=g; feats=g.features.filter(f=>f.properties.total);
   natBands={m:BANDS.map(()=>0),f:BANDS.map(()=>0)};
