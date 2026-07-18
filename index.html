@@ -63,7 +63,9 @@ header.top .sub b{color:var(--ink);font-weight:600;}
 .side{width:360px;flex:0 0 360px;border-left:1px solid var(--line);
   display:flex;flex-direction:column;min-height:0;background:var(--bg);}
 .side .scroll{overflow-y:auto;padding:16px 18px 24px;}
-.seg{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;}
+.seg{display:flex;flex-direction:column;gap:7px;margin-bottom:14px;}
+.seg-row{display:flex;flex-wrap:wrap;gap:6px;}
+.seg-lbl{font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.03em;margin-top:5px;padding-top:8px;border-top:1px solid var(--line2);}
 .seg button{
   font-family:inherit;font-size:12px;padding:7px 10px;border:1px solid var(--line);
   background:#fff;color:var(--muted);border-radius:7px;cursor:pointer;letter-spacing:-.01em;}
@@ -78,6 +80,11 @@ header.top .sub b{color:var(--ink);font-weight:600;}
 .avgchk{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:11.5px;color:var(--muted);cursor:pointer;user-select:none;}
 .avgchk input{accent-color:var(--accent);width:14px;height:14px;cursor:pointer;margin:0;flex:0 0 auto;}
 .avgchk b{color:var(--ink);font-weight:700;}
+.yearctl{display:flex;align-items:center;gap:11px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line2);}
+.playbtn{width:34px;height:34px;border-radius:50%;border:none;background:var(--accent);color:#fff;font-size:13px;cursor:pointer;flex:0 0 auto;display:flex;align-items:center;justify-content:center;line-height:1;}
+.playbtn:hover{background:#2563eb;}
+.yearctl input[type=range]{flex:1;accent-color:var(--accent);cursor:pointer;min-width:0;}
+.yearlbl{font-size:17px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--accent);flex:0 0 auto;min-width:44px;text-align:right;}
 .searchbox{position:relative;margin-bottom:14px;}
 .searchbox input{width:100%;font-family:inherit;font-size:13px;padding:9px 11px;border:1px solid var(--line);
   border-radius:8px;color:var(--ink);}
@@ -156,6 +163,7 @@ header.top .sub b{color:var(--ink);font-weight:600;}
 const BANDS=["0–4","5–9","10–14","15–19","20–24","25–29","30–34","35–39","40–44","45–49","50–54","55–59","60–64","65–69","70–74","75–79","80–84","85–89","90–94","95–99","100+"];
 const fmtN=d3.format(","); const fmt1=d3.format(".1f");
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const YEARS=[2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026];
 
 // 성별격차(%p) = 남성 점유율 − 여성 점유율 = (남−여)/(남+여)×100. 0 중심 대칭.
 const fmtGap=v=> (v>=0?"+":"−")+fmt1(Math.abs(v))+"%p";
@@ -179,9 +187,42 @@ const IND={
     unit:"%", fmt:v=>fmt1(v)+"%", capL:"낮음", capR:"높음"},
   median_age:{label:"중위연령", kind:"seq", interp:d3.interpolateBuPu, avgInterp:t=>d3.interpolateBrBG(1-t),
     unit:"세", fmt:v=>fmt1(v)+"세", capL:"젊음", capR:"고령"},
+  chg_youth:{label:"청년 전체", kind:"div", dom:[-40,0,40], interp:d3.interpolateRdBu, chg:"youth",
+    unit:"%", fmt:v=>(v>=0?"+":"")+fmt1(v)+"%", capL:"감소", capR:"증가", ticks:[-40,-20,0,20,40], tickfmt:v=>(v>0?"+":"")+v},
+  chg_youth_f:{label:"청년 여성", kind:"div", dom:[-40,0,40], interp:d3.interpolateRdBu, chg:"f",
+    unit:"%", fmt:v=>(v>=0?"+":"")+fmt1(v)+"%", capL:"감소", capR:"증가", ticks:[-40,-20,0,20,40], tickfmt:v=>(v>0?"+":"")+v},
+  chg_youth_m:{label:"청년 남성", kind:"div", dom:[-40,0,40], interp:d3.interpolateRdBu, chg:"m",
+    unit:"%", fmt:v=>(v>=0?"+":"")+fmt1(v)+"%", capL:"감소", capR:"증가", ticks:[-40,-20,0,20,40], tickfmt:v=>(v>0?"+":"")+v},
+  chg_gap:{label:"성별격차", kind:"div", dom:[-12,0,12], interp:d3.interpolateRdBu, chg:"gap",
+    unit:"%p", fmt:v=>(v>=0?"+":"")+fmt1(v)+"%p", capL:"여초화", capR:"남초화", ticks:[-12,-6,0,6,12], tickfmt:v=>(v>0?"+":"")+v},
+  ts_gap:{label:"성별격차", kind:"div", dom:[-20,0,20], interp:d3.interpolateRdBu, flip:true, ts:true,
+    tsval:(ym,yf,ym0,yf0)=>(ym+yf)?(ym-yf)/(ym+yf)*100:null, unit:"%p", fmt:fmtGap, capL:"여초", capR:"남초",
+    ticks:[-20,-10,0,10,20], tickfmt:v=>v===0?"0":Math.abs(v)},
+  ts_fidx:{label:"청년 여성 지수", kind:"div", dom:[60,100,140], interp:d3.interpolateRdBu, ts:true,
+    tsval:(ym,yf,ym0,yf0)=>yf0?yf/yf0*100:null, unit:"", fmt:v=>Math.round(v), capL:"감소", capR:"증가",
+    ticks:[60,80,100,120,140], tickfmt:v=>v},
+  ts_pidx:{label:"청년 인구 지수", kind:"div", dom:[60,100,140], interp:d3.interpolateRdBu, ts:true,
+    tsval:(ym,yf,ym0,yf0)=>(ym0+yf0)?(ym+yf)/(ym0+yf0)*100:null, unit:"", fmt:v=>Math.round(v), capL:"감소", capR:"증가",
+    ticks:[60,80,100,120,140], tickfmt:v=>v},
 };
+const GROUPS=[
+  {label:null, keys:["child_share","teen_share","youth_share","youth_gap","overall_gap","aging_rate","median_age"]},
+  {label:"10년 순변화 (2016→2026)", keys:["chg_youth","chg_youth_f","chg_youth_m","chg_gap"]},
+  {label:"연도별 애니메이션 ▶ (2016~2026 · 2016=100)", keys:["ts_gap","ts_fidx","ts_pidx"]},
+];
 
 let geo, feats, current="youth_gap", selected=null, natBands=null, sidoMesh=null, natProps=null, avgCenter=false;
+let year=2026, playing=false, playTimer=null;
+// 지표값 접근: 시계열 지표는 현재 연도 값 계산, 그 외는 속성 그대로
+function mval(ft, key){
+  const c=IND[key], p=ft.properties;
+  if(c.ts){
+    const i=year-YEARS[0];
+    if(!p.ts_ym||p.ts_ym[i]==null||p.ts_yf[i]==null) return null;
+    return c.tsval(p.ts_ym[i],p.ts_yf[i],p.ts_ym[0],p.ts_yf[0]);
+  }
+  return p[key];
+}
 const svg=d3.select("#map"), tip=d3.select("#tip");
 const gAll=svg.append("g"), gRegions=gAll.append("g"), gSido=gAll.append("g");
 let path, proj, zoom, W, H;
@@ -253,6 +294,7 @@ function colorScale(key){
 }
 
 function render(){
+  if(!IND[current].ts && playing) stopPlay();
   const key=current, col=colorScale(key);
   const sel=gRegions.selectAll("path.region").data(feats,d=>d.properties.code||d.properties.name+d.properties.sido);
   sel.join(
@@ -261,25 +303,73 @@ function render(){
       .on("click",(e,d)=>{e.stopPropagation();selected=d;render();showDetail(d);}),
     u=>u, x=>x.remove())
     .attr("d",path)
-    .attr("fill",d=>col(d.properties[key]))
+    .attr("fill",d=>col(mval(d,key)))
     .classed("sel",d=>d===selected);
   // 시도(도) 경계를 진하게
   gSido.selectAll("path").data(sidoMesh?[sidoMesh]:[]).join("path").attr("class","sido-line").attr("d",path);
   drawLegend();
 }
+function paintFills(animate){
+  const col=colorScale(current);
+  let s=gRegions.selectAll("path.region");
+  if(animate) s=s.transition().duration(300);
+  s.attr("fill",d=>col(mval(d,current)));
+}
+// ---------- 연도별 애니메이션 ----------
+function setYear(y,animate){
+  year=Math.max(YEARS[0],Math.min(YEARS[YEARS.length-1],y));
+  d3.select("#yearlbl").text(year); d3.select("#yearslider").property("value",year);
+  paintFills(animate);
+}
+function stopPlay(){ playing=false; if(playTimer){clearInterval(playTimer);playTimer=null;} d3.select("#playbtn").html("▶"); }
+function togglePlay(){
+  if(playing){ stopPlay(); return; }
+  playing=true; d3.select("#playbtn").html("⏸");
+  if(year>=YEARS[YEARS.length-1]) setYear(YEARS[0],false);
+  playTimer=setInterval(()=>{
+    if(year>=YEARS[YEARS.length-1]){ stopPlay(); return; }
+    setYear(year+1,true);
+  },800);
+}
+function buildYearCtl(el){
+  const yc=el.append("div").attr("class","yearctl");
+  yc.append("button").attr("class","playbtn").attr("id","playbtn").html(playing?"⏸":"▶").on("click",togglePlay);
+  yc.append("input").attr("type","range").attr("id","yearslider").attr("min",YEARS[0]).attr("max",YEARS[YEARS.length-1])
+    .attr("step",1).property("value",year).on("input",function(){ stopPlay(); setYear(+this.value,false); });
+  yc.append("span").attr("class","yearlbl").attr("id","yearlbl").text(year);
+}
 
 function onHover(e,d){
-  const p=d.properties, c=IND[current], v=p[current];
-  const isGap=current.indexOf("gap")>=0, isYouth=current==="youth_gap";
-  // 어두운 툴팁 배경용 밝은 톤: 남초=파랑, 여초=빨강
-  const gc = v>0.3?"#7cb3ef":v<-0.3?"#f2a0a0":"#cbd5e1";
-  const val = v==null ? "–"
-    : isGap ? `<span style="color:${gc};font-weight:700">${c.fmt(v)} · ${gapDir(v)}</span>`
-    : c.fmt(v);
-  const sub = isGap
-    ? `${isYouth?"청년 ":""}남 ${fmtN(isYouth?p.youth_m:p.m_total)} · 여 ${fmtN(isYouth?p.youth_f:p.f_total)}`
-    : c.popKey ? `${c.ageLabel} ${fmtN(p[c.popKey])} · 총 ${fmtN(p.total)}`
-    : `총인구 ${fmtN(p.total)}`;
+  const p=d.properties, c=IND[current], v=mval(d,current);
+  let val, sub;
+  if(c.ts){ // 연도별 애니메이션 지표
+    const i=year-YEARS[0], ym=p.ts_ym?p.ts_ym[i]:null, yf=p.ts_yf?p.ts_yf[i]:null;
+    const mid=current==="ts_gap"?0:100;
+    const gc = v>mid?"#7cb3ef":v<mid?"#f2a0a0":"#cbd5e1";
+    val = v==null?"–":`<span style="color:${gc};font-weight:700">${c.fmt(v)}${current==="ts_gap"?" · "+gapDir(v):""}</span>`;
+    sub = `${year}년 · 남 ${fmtN(ym)} · 여 ${fmtN(yf)}`;
+    tip.style("opacity",1).style("left",(e.clientX+14)+"px").style("top",(e.clientY+12)+"px")
+      .html(`<b>${p.sido} ${p.name}</b><div class="tv">${c.label} · ${val}</div><div class="ts">${sub}</div>`);
+    return;
+  }
+  if(c.chg){ // 10년 변화 지표
+    const gc = v>0?"#7cb3ef":v<0?"#f2a0a0":"#cbd5e1";
+    val = v==null?"–":`<span style="color:${gc};font-weight:700">${c.fmt(v)}</span>`;
+    sub = c.chg==="f" ? `여성 ${fmtN(p.y16_f)} → ${fmtN(p.youth_f)}`
+        : c.chg==="m" ? `남성 ${fmtN(p.y16_m)} → ${fmtN(p.youth_m)}`
+        : c.chg==="youth" ? `청년 ${fmtN(p.y16_m+p.y16_f)} → ${fmtN(p.youth_m+p.youth_f)}`
+        : `2016 → 2026 성별격차 변화`;
+  } else {
+    const isGap = current==="youth_gap"||current==="overall_gap", isYouth=current==="youth_gap";
+    const gc = v>0.3?"#7cb3ef":v<-0.3?"#f2a0a0":"#cbd5e1";
+    val = v==null ? "–"
+      : isGap ? `<span style="color:${gc};font-weight:700">${c.fmt(v)} · ${gapDir(v)}</span>`
+      : c.fmt(v);
+    sub = isGap
+      ? `${isYouth?"청년 ":""}남 ${fmtN(isYouth?p.youth_m:p.m_total)} · 여 ${fmtN(isYouth?p.youth_f:p.f_total)}`
+      : c.popKey ? `${c.ageLabel} ${fmtN(p[c.popKey])} · 총 ${fmtN(p.total)}`
+      : `총인구 ${fmtN(p.total)}`;
+  }
   tip.style("opacity",1).style("left",(e.clientX+14)+"px").style("top",(e.clientY+12)+"px")
     .html(`<b>${p.sido} ${p.name}</b><div class="tv">${c.label} · ${val}</div><div class="ts">${sub}</div>`);
 }
@@ -324,16 +414,21 @@ function drawLegend(){
       .on("change",function(){avgCenter=this.checked; render();});
     wrap.append("span").html(`전국평균 <b>${c.fmt(avg)}</b> 기준`);
   }
+  if(c.ts) buildYearCtl(el);
 }
 
 // ---------- segmented control ----------
 function buildSeg(){
-  const seg=d3.select("#seg");
-  Object.entries(IND).forEach(([k,c])=>{
-    seg.append("button").attr("class",k===current?"on":"").text(c.label)
-      .on("click",function(){current=k;selected=selected;
-        seg.selectAll("button").classed("on",false);d3.select(this).classed("on",true);
-        render(); if(selected)showDetail(selected);});
+  const seg=d3.select("#seg"); seg.html("");
+  GROUPS.forEach(g=>{
+    if(g.label) seg.append("div").attr("class","seg-lbl").text(g.label);
+    const row=seg.append("div").attr("class","seg-row");
+    g.keys.forEach(k=>{
+      row.append("button").attr("class",k===current?"on":"").text(IND[k].label)
+        .on("click",function(){current=k;
+          seg.selectAll("button").classed("on",false);d3.select(this).classed("on",true);
+          render(); if(selected)showDetail(selected);});
+    });
   });
 }
 
@@ -361,12 +456,19 @@ function nationalProps(){
   const ym=d3.sum(m.slice(4,8)), yf=d3.sum(f.slice(4,8));
   const mt=d3.sum(m), ft=d3.sum(f), tot=mt+ft, old=d3.sum(m.slice(13))+d3.sum(f.slice(13));
   const cp=d3.sum(m.slice(0,2))+d3.sum(f.slice(0,2)), tp=d3.sum(m.slice(2,4))+d3.sum(f.slice(2,4));
+  let Y16M=0,Y16F=0; feats.forEach(x=>{const q=x.properties; Y16M+=q.y16_m||0; Y16F+=q.y16_f||0;});
+  const g26=(ym-yf)/(ym+yf)*100, g16=(Y16M+Y16F)?(Y16M-Y16F)/(Y16M+Y16F)*100:null;
   return {name:"전국", m, f, youth_m:ym, youth_f:yf, m_total:mt, f_total:ft, total:tot,
     youth_gap:(ym+yf)?(ym-yf)/(ym+yf)*100:null,
     overall_gap:(mt+ft)?(mt-ft)/(mt+ft)*100:null,
     child_pop:cp, child_share:tot?cp/tot*100:null, teen_pop:tp, teen_share:tot?tp/tot*100:null,
     youth_pop:ym+yf, youth_share:tot?(ym+yf)/tot*100:null,
-    aging_rate:tot?old/tot*100:null, median_age:medianAge(m,f)};
+    aging_rate:tot?old/tot*100:null, median_age:medianAge(m,f),
+    y16_m:Y16M, y16_f:Y16F,
+    chg_youth:(Y16M+Y16F)?(ym+yf-Y16M-Y16F)/(Y16M+Y16F)*100:null,
+    chg_youth_m:Y16M?(ym-Y16M)/Y16M*100:null,
+    chg_youth_f:Y16F?(yf-Y16F)/Y16F*100:null,
+    chg_gap:(g16!=null)?g26-g16:null};
 }
 
 // ---------- detail panel + pyramid ----------
