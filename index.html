@@ -98,6 +98,12 @@ header.top .sub b{color:var(--ink);font-weight:600;}
 .avgchk b{color:var(--ink);font-weight:700;}
 #globalyear{display:flex;align-items:center;gap:11px;margin-bottom:14px;padding:10px 13px;background:#eef4fb;border:1px solid #d8e6f8;border-radius:10px;}
 #globalyear:empty{display:none;}
+#timeline{margin:-4px 0 14px;}
+#timeline:empty{display:none;}
+#timeline svg{display:block;overflow:visible;}
+#timeline .tl-cap{font-size:10px;color:var(--muted);margin-bottom:3px;}
+#timeline .tl-cap i{display:inline-block;width:12px;height:0;border-top:2px solid #111827;vertical-align:middle;margin:0 3px;}
+#timeline .tl-cap s{display:inline-block;width:12px;height:0;border-top:1px solid #cbd5e1;vertical-align:middle;margin:0 3px;text-decoration:none;}
 #globalyear .ytag{font-size:11px;color:var(--accent);font-weight:700;flex:0 0 auto;}
 .playbtn{width:32px;height:32px;border-radius:50%;border:none;background:var(--accent);color:#fff;font-size:12px;cursor:pointer;flex:0 0 auto;display:flex;align-items:center;justify-content:center;line-height:1;}
 .playbtn:hover{background:#2563eb;}
@@ -162,6 +168,7 @@ header.top .sub b{color:var(--ink);font-weight:600;}
       <div class="scroll">
         <div class="viewtabs" id="viewtabs"></div>
         <div id="globalyear"></div>
+        <div id="timeline"></div>
         <div class="seg" id="seg"></div>
         <div class="legend" id="legend"></div>
         <div class="searchbox">
@@ -289,7 +296,7 @@ function rewind(g){
   });
 }
 
-d3.json("sigungu_pop.geojson?v=20260718b").then(g=>{
+d3.json("sigungu_pop.geojson?v=20260718c").then(g=>{
   rewind(g);
   geo=g; feats=g.features.filter(f=>f.properties.total);
   natBands={m:BANDS.map(()=>0),f:BANDS.map(()=>0)};
@@ -347,7 +354,7 @@ function colorScale(key){
 }
 
 function render(){
-  updateYearCtl(); updateTitle();
+  updateYearCtl(); updateTitle(); drawTimeline();
   if(viewMode==="scatter"){ drawScatter(); drawScatterLegend(); return; }
   const key=current, biv=viewMode==="bivariate", col=colorScale(key);
   const sel=gRegions.selectAll("path.region").data(feats,d=>d.properties.code||d.properties.name+d.properties.sido);
@@ -373,7 +380,7 @@ function paintFills(animate){
 function setYear(y,animate){
   year=Math.max(YEARS[0],Math.min(YEARS[YEARS.length-1],y));
   d3.select("#yearlbl").text(year); d3.select("#yearslider").property("value",year);
-  paintFills(animate); updateTitle();
+  paintFills(animate); updateTitle(); moveMarker();
 }
 function stopPlay(){ playing=false; if(playTimer){clearInterval(playTimer);playTimer=null;} d3.select("#playbtn").html("▶"); }
 function togglePlay(){
@@ -393,6 +400,44 @@ function updateYearCtl(){
   el.append("input").attr("type","range").attr("id","yearslider").attr("min",YEARS[0]).attr("max",YEARS[YEARS.length-1])
     .attr("step",1).property("value",year).on("input",function(){ stopPlay(); setYear(+this.value,false); });
   el.append("span").attr("class","yearlbl").attr("id","yearlbl").text(year);
+}
+// ---------- 타임라인(스파게티) ----------
+let tlX=null,tlY=null,tlNat=null;
+function regionSeries(p,key){
+  if(key==="ts_fidx") return p.ts_yf&&p.ts_yf[0]?p.ts_yf.map(v=>v/p.ts_yf[0]*100):null;
+  if(key==="ts_pidx") return (p.ts_ym&&(p.ts_ym[0]+p.ts_yf[0]))?p.ts_ym.map((v,i)=>(v+p.ts_yf[i])/(p.ts_ym[0]+p.ts_yf[0])*100):null;
+  return p.yr?p.yr[key]:null;
+}
+function drawTimeline(){
+  const el=d3.select("#timeline"); el.html(""); tlX=null;
+  if(!(TIME_KEYS.has(current) && viewMode!=="scatter" && geo.nat && geo.nat[current])) return;
+  const c=IND[current], fmt=c.fmt, nat=geo.nat[current];
+  el.append("div").attr("class","tl-cap").html('<s></s> 시군구 250곳　<i></i> 전국');
+  const W2=Math.max(240,(el.node().clientWidth||320)), h=88, M={l:8,r:44,t:18,b:15};
+  const svg=el.append("svg").attr("width",W2).attr("height",h);
+  const series=feats.map(f=>regionSeries(f.properties,current)).filter(Boolean);
+  const allv=[]; series.forEach(s=>s.forEach(v=>{if(v!=null)allv.push(v)})); nat.forEach(v=>{if(v!=null)allv.push(v)});
+  const x=d3.scalePoint().domain(YEARS).range([M.l,W2-M.r]);
+  const y=d3.scaleLinear().domain(d3.extent(allv)).nice().range([h-M.b,M.t]);
+  const line=d3.line().defined(v=>v!=null).x((v,i)=>x(YEARS[i])).y(v=>y(v));
+  svg.append("g").selectAll("path").data(series).join("path").attr("d",line)
+    .attr("fill","none").attr("stroke","#cbd5e1").attr("stroke-width",.5).attr("opacity",.3);
+  svg.append("path").attr("d",line(nat)).attr("fill","none").attr("stroke","#111827").attr("stroke-width",2).attr("stroke-linejoin","round");
+  const i1=YEARS.length-1;
+  [0,i1].forEach(i=>svg.append("circle").attr("cx",x(YEARS[i])).attr("cy",y(nat[i])).attr("r",2.6).attr("fill","#111827"));
+  svg.append("text").attr("x",x(YEARS[0])).attr("y",y(nat[0])-7).attr("font-size",11).attr("font-weight",700).attr("fill","#111827").text(fmt(nat[0]));
+  svg.append("text").attr("x",W2-M.r+5).attr("y",y(nat[i1])+3.5).attr("font-size",11.5).attr("font-weight",700).attr("fill","#111827").text(fmt(nat[i1]));
+  svg.append("text").attr("x",x(YEARS[0])).attr("y",h-2).attr("font-size",9.5).attr("fill","#94a3b8").text("2016");
+  svg.append("text").attr("x",x(YEARS[i1])).attr("y",h-2).attr("font-size",9.5).attr("fill","#94a3b8").attr("text-anchor","end").text("2026");
+  const mk=svg.append("g");
+  mk.append("line").attr("id","tlmkline").attr("y1",M.t-4).attr("y2",h-M.b).attr("stroke","#3b82f6").attr("stroke-width",1);
+  mk.append("circle").attr("id","tlmkdot").attr("r",3).attr("fill","#3b82f6");
+  tlX=x; tlY=y; tlNat=nat; moveMarker();
+}
+function moveMarker(){
+  if(!tlX) return; const xx=tlX(year), v=tlNat[year-YEARS[0]];
+  d3.select("#tlmkline").attr("x1",xx).attr("x2",xx);
+  d3.select("#tlmkdot").attr("cx",xx).attr("cy",tlY(v));
 }
 
 // ---------- 뷰 전환 ----------
