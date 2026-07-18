@@ -87,12 +87,13 @@ header.top .sub b{color:var(--ink);font-weight:600;}
   background:#fff;color:var(--muted);border-radius:7px;cursor:pointer;letter-spacing:-.01em;}
 .seg button:hover{border-color:#cbd5e1;color:var(--ink);}
 .seg button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}
-.legend{margin:2px 0 18px;}
+.legend{margin:16px 0 18px;}
 .legend .lbar{height:12px;border-radius:3px;margin-bottom:5px;position:relative;}
 .legend .lax{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);}
 .legend .lcap{display:flex;justify-content:space-between;font-size:11px;color:var(--ink);margin-top:3px;font-weight:600;}
 .avgmark{position:absolute;top:-3px;bottom:-3px;width:2px;background:#0f172a;transform:translateX(-1px);border-radius:1px;}
 .avgmark::after{content:"";position:absolute;left:50%;top:-5px;transform:translateX(-50%);border-left:3.5px solid transparent;border-right:3.5px solid transparent;border-top:5px solid #0f172a;}
+.avgmark-lbl{position:absolute;bottom:calc(100% + 5px);left:50%;transform:translateX(-50%);font-size:9px;font-weight:700;color:#0f172a;white-space:nowrap;background:rgba(255,255,255,.85);padding:0 3px;border-radius:3px;}
 .chkrow{display:flex;flex-wrap:wrap;gap:7px 16px;margin-top:10px;}
 .chkrow .avgchk{margin-top:0;}
 .avgchk{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:11.5px;color:var(--muted);cursor:pointer;user-select:none;}
@@ -612,7 +613,8 @@ function drawLegend(){
   const avg = (!base2016 && natProps) ? natProps[current] : null;
   if(avg!=null){
     let t = flip ? (dom[1]-avg)/(dom[1]-dom[0]) : (avg-dom[0])/(dom[1]-dom[0]);
-    lbar.append("div").attr("class","avgmark").style("left",(Math.max(0,Math.min(1,t))*100)+"%");
+    const mk=lbar.append("div").attr("class","avgmark").style("left",(Math.max(0,Math.min(1,t))*100)+"%");
+    mk.append("span").attr("class","avgmark-lbl").html(`전국 ${c.fmt(avg)}`);
   }
   const ax=el.append("div").attr("class","lax");
   if(c.kind==="div"){ const tk=c.ticks||[dom[0],c.dom[1],dom[1]]; (flip?tk.slice().reverse():tk).forEach(t=>ax.append("span").text(c.tickfmt?c.tickfmt(t):t)); }
