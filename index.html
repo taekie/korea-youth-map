@@ -66,6 +66,22 @@ header.top .sub b{color:var(--ink);font-weight:600;}
 .seg{display:flex;flex-direction:column;gap:7px;margin-bottom:14px;}
 .seg-row{display:flex;flex-wrap:wrap;gap:6px;}
 .seg-lbl{font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.03em;margin-top:5px;padding-top:8px;border-top:1px solid var(--line2);}
+.viewtabs{display:flex;gap:4px;margin-bottom:14px;background:var(--panel);padding:4px;border-radius:9px;border:1px solid var(--line2);}
+.viewtabs button{flex:1;font-family:inherit;font-size:12.5px;padding:8px 6px;border:none;background:transparent;color:var(--muted);border-radius:6px;cursor:pointer;font-weight:600;}
+.viewtabs button:hover{color:var(--ink);}
+.viewtabs button.on{background:#fff;color:var(--accent);box-shadow:0 1px 2px rgba(0,0,0,.06);}
+.bivwrap{margin:2px 0 16px;}
+.bivrow{display:flex;gap:9px;align-items:stretch;}
+.bivy-lbl{font-size:10.5px;color:var(--muted);font-weight:600;writing-mode:vertical-rl;transform:rotate(180deg);text-align:center;padding:2px 0;}
+.bivgrid{display:grid;grid-template-columns:repeat(3,26px);grid-template-rows:repeat(3,26px);gap:2px;}
+.bivgrid div{border-radius:2px;}
+.bivx-lbl{font-size:10.5px;color:var(--muted);font-weight:600;text-align:center;margin-top:5px;padding-left:26px;}
+.dot{stroke:#fff;stroke-width:.6px;cursor:pointer;}
+.dot.sel{stroke:#111827;stroke-width:1.8px;}
+.ax-line{stroke:#e5e7eb;stroke-width:1;}
+.ax-ref{stroke:#94a3b8;stroke-width:1;stroke-dasharray:3,3;}
+.ax-txt{font-size:11px;fill:var(--muted);}
+.ax-title{font-size:12px;fill:var(--ink);font-weight:600;}
 .seg button{
   font-family:inherit;font-size:12px;padding:7px 10px;border:1px solid var(--line);
   background:#fff;color:var(--muted);border-radius:7px;cursor:pointer;letter-spacing:-.01em;}
@@ -142,6 +158,7 @@ header.top .sub b{color:var(--ink);font-weight:600;}
     </div>
     <aside class="side">
       <div class="scroll">
+        <div class="viewtabs" id="viewtabs"></div>
         <div class="seg" id="seg"></div>
         <div class="legend" id="legend"></div>
         <div class="searchbox">
@@ -224,8 +241,8 @@ function mval(ft, key){
   return p[key];
 }
 const svg=d3.select("#map"), tip=d3.select("#tip");
-const gAll=svg.append("g"), gRegions=gAll.append("g"), gSido=gAll.append("g");
-let path, proj, zoom, W, H;
+const gAll=svg.append("g"), gRegions=gAll.append("g"), gSido=gAll.append("g"), gScatter=svg.append("g");
+let path, proj, zoom, W, H, viewMode="map", bivTh=null;
 
 // fix polygon winding for d3 spherical fill (reverse rings whose feature area > hemisphere)
 function rewind(g){
@@ -256,7 +273,10 @@ d3.json("sigungu_pop.geojson").then(g=>{
     sidoMesh=topojson.mesh(topo, topo.objects.s, (a,b)=>a===b||a.properties.sido!==b.properties.sido);
   }catch(err){console.warn("sido mesh 실패",err);}
   natProps=nationalProps();
-  buildSeg(); buildSearch(); setupMap(); render();
+  { const xs=feats.map(f=>f.properties.youth_gap).filter(v=>v!=null).sort(d3.ascending),
+        ys=feats.map(f=>f.properties.youth_share).filter(v=>v!=null).sort(d3.ascending);
+    bivTh={x:[d3.quantile(xs,1/3),d3.quantile(xs,2/3)], y:[d3.quantile(ys,1/3),d3.quantile(ys,2/3)]}; }
+  buildSeg(); buildViewTabs(); buildSearch(); setupMap(); render();
   showDetail(null);
   window.addEventListener("resize",()=>{setupMap();render();if(selected)zoomTo(selected,false);});
 });
@@ -295,7 +315,8 @@ function colorScale(key){
 
 function render(){
   if(!IND[current].ts && playing) stopPlay();
-  const key=current, col=colorScale(key);
+  if(viewMode==="scatter"){ drawScatter(); drawScatterLegend(); return; }
+  const key=current, biv=viewMode==="bivariate", col=colorScale(key);
   const sel=gRegions.selectAll("path.region").data(feats,d=>d.properties.code||d.properties.name+d.properties.sido);
   sel.join(
     enter=>enter.append("path").attr("class","region")
@@ -303,11 +324,11 @@ function render(){
       .on("click",(e,d)=>{e.stopPropagation();selected=d;render();showDetail(d);}),
     u=>u, x=>x.remove())
     .attr("d",path)
-    .attr("fill",d=>col(mval(d,key)))
+    .attr("fill",d=> biv?bivColor(d):col(mval(d,key)))
     .classed("sel",d=>d===selected);
   // 시도(도) 경계를 진하게
   gSido.selectAll("path").data(sidoMesh?[sidoMesh]:[]).join("path").attr("class","sido-line").attr("d",path);
-  drawLegend();
+  if(biv) drawBivarLegend(); else drawLegend();
 }
 function paintFills(animate){
   const col=colorScale(current);
@@ -339,8 +360,87 @@ function buildYearCtl(el){
   yc.append("span").attr("class","yearlbl").attr("id","yearlbl").text(year);
 }
 
+// ---------- 뷰 전환 ----------
+const VIEWS=[{k:"map",label:"지도"},{k:"bivariate",label:"이변량"},{k:"scatter",label:"산점도"}];
+function buildViewTabs(){
+  const vt=d3.select("#viewtabs"); vt.html("");
+  VIEWS.forEach(v=>vt.append("button").attr("class",v.k===viewMode?"on":"").text(v.label)
+    .on("click",()=>{ if(viewMode!==v.k) setView(v.k); }));
+}
+function setView(mode){
+  if(playing) stopPlay();
+  viewMode=mode; buildViewTabs();
+  d3.select("#seg").style("display", mode==="map"?"flex":"none");
+  const sc=mode==="scatter";
+  gAll.style("display", sc?"none":null); gScatter.style("display", sc?null:"none");
+  d3.select(".zbtns").style("display", sc?"none":null);
+  if(sc) svg.on(".zoom",null); else svg.call(zoom);
+  render(); showDetail(selected);
+}
+
+// ---------- 이변량: 청년 인구비율(y) × 성별격차(x) ----------
+const BIV_PAL=["#e8e8e8","#ace4e4","#5ac8c8","#dfb0d6","#a5add3","#5698b9","#be64ac","#8c62aa","#3b4994"];
+function bivBin(v,th){ return v<=th[0]?0:v<=th[1]?1:2; }
+function bivColor(d){
+  const p=d.properties; if(p.youth_gap==null||p.youth_share==null||!bivTh) return "#e5e7eb";
+  return BIV_PAL[bivBin(p.youth_share,bivTh.y)*3+bivBin(p.youth_gap,bivTh.x)];
+}
+function drawBivarLegend(){
+  const el=d3.select("#legend"); el.html("");
+  const w=el.append("div").attr("class","bivwrap");
+  const row=w.append("div").attr("class","bivrow");
+  row.append("div").attr("class","bivy-lbl").text("청년 인구비율 →");
+  const g=row.append("div").attr("class","bivgrid");
+  for(let by=2;by>=0;by--) for(let bx=0;bx<3;bx++) g.append("div").style("background",BIV_PAL[by*3+bx]);
+  w.append("div").attr("class","bivx-lbl").text("성별격차  여초 → 남초");
+}
+
+// ---------- 산점도 ----------
+function isCapital(s){ return s==="서울"||s==="경기"||s==="인천"; }
+function drawScatter(){
+  gScatter.selectAll("*").remove();
+  const M={t:24,r:22,b:50,l:52}, iw=W-M.l-M.r, ih=H-M.t-M.b;
+  const data=feats.filter(f=>f.properties.youth_share!=null&&f.properties.youth_gap!=null);
+  const x=d3.scaleLinear().domain(d3.extent(data,d=>d.properties.youth_share)).nice().range([M.l,M.l+iw]);
+  const y=d3.scaleLinear().domain(d3.extent(data,d=>d.properties.youth_gap)).nice().range([M.t+ih,M.t]);
+  const r=d3.scaleSqrt().domain([0,d3.max(data,d=>d.properties.total)]).range([0,28]);
+  const gg=gScatter.append("g");
+  x.ticks(6).forEach(t=>{ gg.append("line").attr("class","ax-line").attr("x1",x(t)).attr("x2",x(t)).attr("y1",M.t).attr("y2",M.t+ih);
+    gg.append("text").attr("class","ax-txt").attr("x",x(t)).attr("y",M.t+ih+16).attr("text-anchor","middle").text(t+"%"); });
+  y.ticks(6).forEach(t=>{ gg.append("line").attr("class","ax-line").attr("x1",M.l).attr("x2",M.l+iw).attr("y1",y(t)).attr("y2",y(t));
+    gg.append("text").attr("class","ax-txt").attr("x",M.l-8).attr("y",y(t)+3).attr("text-anchor","end").text((t>0?"+":"")+t); });
+  if(natProps){
+    gScatter.append("line").attr("class","ax-ref").attr("x1",x(natProps.youth_share)).attr("x2",x(natProps.youth_share)).attr("y1",M.t).attr("y2",M.t+ih);
+    gScatter.append("line").attr("class","ax-ref").attr("x1",M.l).attr("x2",M.l+iw).attr("y1",y(natProps.youth_gap)).attr("y2",y(natProps.youth_gap));
+  }
+  gScatter.append("text").attr("class","ax-title").attr("x",M.l+iw/2).attr("y",H-8).attr("text-anchor","middle").text("청년(20–39) 인구비율 →");
+  gScatter.append("text").attr("class","ax-title").attr("transform",`translate(15,${M.t+ih/2}) rotate(-90)`).attr("text-anchor","middle").text("← 여초   성별격차   남초 →");
+  gScatter.append("g").selectAll("circle").data(data).join("circle").attr("class","dot")
+    .attr("cx",d=>x(d.properties.youth_share)).attr("cy",d=>y(d.properties.youth_gap))
+    .attr("r",d=>Math.max(2.2,r(d.properties.total)))
+    .attr("fill",d=>isCapital(d.properties.sido)?"#3b82f6":"#e0795a").attr("fill-opacity",.6)
+    .classed("sel",d=>d===selected)
+    .on("mousemove",(e,d)=>{ const p=d.properties;
+      tip.style("opacity",1).style("left",(e.clientX+14)+"px").style("top",(e.clientY+12)+"px")
+        .html(`<b>${p.sido} ${p.name}</b><div class="ts">청년비율 ${fmt1(p.youth_share)}% · 성별격차 ${fmtGap(p.youth_gap)}<br>총인구 ${fmtN(p.total)}</div>`); })
+    .on("mouseleave",()=>tip.style("opacity",0))
+    .on("click",(e,d)=>{e.stopPropagation();selected=d;drawScatter();showDetail(d);});
+}
+function drawScatterLegend(){
+  d3.select("#legend").html(`<div style="font-size:12px;color:var(--ink);line-height:1.8">
+    <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#3b82f6;margin-right:5px"></span>수도권(서울·경기·인천)
+    　<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#e0795a;margin-right:5px"></span>지방
+    <div style="color:var(--muted);font-size:11px;margin-top:2px">원 크기 = 총인구 · 점선 = 전국평균</div></div>`);
+}
+
 function onHover(e,d){
-  const p=d.properties, c=IND[current], v=mval(d,current);
+  const p=d.properties;
+  if(viewMode==="bivariate"){
+    tip.style("opacity",1).style("left",(e.clientX+14)+"px").style("top",(e.clientY+12)+"px")
+      .html(`<b>${p.sido} ${p.name}</b><div class="ts">청년비율 ${fmt1(p.youth_share)}% · 성별격차 ${fmtGap(p.youth_gap)}${p.youth_gap!=null?" "+gapDir(p.youth_gap):""}</div>`);
+    return;
+  }
+  const c=IND[current], v=mval(d,current);
   let val, sub;
   if(c.ts){ // 연도별 애니메이션 지표
     const i=year-YEARS[0], ym=p.ts_ym?p.ts_ym[i]:null, yf=p.ts_yf?p.ts_yf[i]:null;
