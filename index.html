@@ -107,7 +107,10 @@ header.top .sub b{color:var(--ink);font-weight:600;}
 #globalyear .ytag{font-size:11px;color:var(--accent);font-weight:700;flex:0 0 auto;}
 .playbtn{width:32px;height:32px;border-radius:50%;border:none;background:var(--accent);color:#fff;font-size:12px;cursor:pointer;flex:0 0 auto;display:flex;align-items:center;justify-content:center;line-height:1;}
 .playbtn:hover{background:#2563eb;}
-#globalyear input[type=range]{flex:1;accent-color:var(--accent);cursor:pointer;min-width:0;}
+#globalyear input[type=range]{-webkit-appearance:none;appearance:none;flex:1;min-width:0;height:5px;border-radius:3px;background:#c9dcf3;cursor:pointer;}
+#globalyear input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.25);cursor:pointer;}
+#globalyear input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--accent);border:2px solid #fff;cursor:pointer;}
+#globalyear input[type=range]::-moz-range-track{height:5px;border-radius:3px;background:#c9dcf3;}
 .yearlbl{font-size:17px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--accent);flex:0 0 auto;min-width:44px;text-align:right;}
 .searchbox{position:relative;margin-bottom:14px;}
 .searchbox input{width:100%;font-family:inherit;font-size:13px;padding:9px 11px;border:1px solid var(--line);
@@ -403,6 +406,11 @@ function updateYearCtl(){
 }
 // ---------- 타임라인(스파게티) ----------
 let tlX=null,tlY=null,tlNat=null;
+function metricBase(key){
+  if(["child_share","teen_share","youth_share","aging_rate","youth_gap","overall_gap"].includes(key)) return 0;
+  if(key==="ts_fidx"||key==="ts_pidx") return 100;
+  return null; // 중위연령 등은 베이스라인 없음
+}
 function regionSeries(p,key){
   if(key==="ts_fidx") return p.ts_yf&&p.ts_yf[0]?p.ts_yf.map(v=>v/p.ts_yf[0]*100):null;
   if(key==="ts_pidx") return (p.ts_ym&&(p.ts_ym[0]+p.ts_yf[0]))?p.ts_ym.map((v,i)=>(v+p.ts_yf[i])/(p.ts_ym[0]+p.ts_yf[0])*100):null;
@@ -418,8 +426,17 @@ function drawTimeline(){
   const series=feats.map(f=>regionSeries(f.properties,current)).filter(Boolean);
   const allv=[]; series.forEach(s=>s.forEach(v=>{if(v!=null)allv.push(v)})); nat.forEach(v=>{if(v!=null)allv.push(v)});
   const x=d3.scalePoint().domain(YEARS).range([M.l,W2-M.r]);
-  const y=d3.scaleLinear().domain(d3.extent(allv)).nice().range([h-M.b,M.t]);
+  const base=metricBase(current);
+  let dom=d3.extent(allv);
+  if(base!=null) dom=[Math.min(dom[0],base),Math.max(dom[1],base)];
+  const y=d3.scaleLinear().domain(dom).nice().range([h-M.b,M.t]);
   const line=d3.line().defined(v=>v!=null).x((v,i)=>x(YEARS[i])).y(v=>y(v));
+  if(base!=null){
+    svg.append("line").attr("x1",M.l).attr("x2",W2-M.r).attr("y1",y(base)).attr("y2",y(base))
+      .attr("stroke","#cbd5e1").attr("stroke-width",1).attr("stroke-dasharray","3,2");
+    svg.append("text").attr("x",M.l).attr("y",y(base)-3).attr("font-size",9).attr("fill","#94a3b8")
+      .text(base===100?"100":(c.unit==="%"?"0%":"0"));
+  }
   svg.append("g").selectAll("path").data(series).join("path").attr("d",line)
     .attr("fill","none").attr("stroke","#cbd5e1").attr("stroke-width",.5).attr("opacity",.3);
   svg.append("path").attr("d",line(nat)).attr("fill","none").attr("stroke","#111827").attr("stroke-width",2).attr("stroke-linejoin","round");
