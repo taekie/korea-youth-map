@@ -94,6 +94,12 @@ header.top .sub b{color:var(--ink);font-weight:600;}
 .avgmark{position:absolute;top:-3px;bottom:-3px;width:2px;background:#0f172a;transform:translateX(-1px);border-radius:1px;}
 .avgmark::after{content:"";position:absolute;left:50%;top:-5px;transform:translateX(-50%);border-left:3.5px solid transparent;border-right:3.5px solid transparent;border-top:5px solid #0f172a;}
 .avgmark-lbl{position:absolute;bottom:calc(100% + 5px);left:50%;transform:translateX(-50%);font-size:9px;font-weight:700;color:#0f172a;white-space:nowrap;background:rgba(255,255,255,.85);padding:0 3px;border-radius:3px;}
+.clusterleg{display:flex;flex-direction:column;gap:9px;margin:4px 0 16px;}
+.clrow{display:flex;gap:8px;align-items:flex-start;}
+.clrow i{width:14px;height:14px;border-radius:3px;flex:0 0 auto;margin-top:2px;}
+.clnm{font-size:12.5px;font-weight:700;color:var(--ink);}
+.clnm span{color:var(--muted);font-weight:600;font-size:11px;margin-left:2px;}
+.cldesc{font-size:10.5px;color:var(--muted);margin-top:1px;}
 .chkrow{display:flex;flex-wrap:wrap;gap:7px 16px;margin-top:10px;}
 .chkrow .avgchk{margin-top:0;}
 .avgchk{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:11.5px;color:var(--muted);cursor:pointer;user-select:none;}
@@ -235,7 +241,12 @@ const IND={
 const GROUPS=[
   {label:null, keys:["child_share","teen_share","youth_share","youth_gap","overall_gap","aging_rate","median_age"]},
   {label:"10년 순변화 (2016→2026)", keys:["chg_youth","chg_youth_f","chg_youth_m","chg_gap"]},
+  {label:"군집 · 0–9·20대·30대 10년 변화 패턴", keys:["cluster"]},
 ];
+IND.cluster={label:"인구변화 유형", cluster:true, unit:""};
+const CLUSTER_PAL=["#1a9850","#a6d96a","#fee08b","#fdae61","#d73027"];
+const CLUSTER_NAMES=["성장형 (신도시)","30대 정착·저출산","완만 감소","청년 유출","급속 쇠퇴"];
+const CLUSTER_DESC=["0–9·20·30대 모두 증가","30대 유지, 0–9 급감","전 세대 완만 감소","20대 중심 유출","전 세대 급감(소멸위기)"];
 // 연도별 애니메이션 가능한 지표 (전역 연도 슬라이더가 제어)
 const TIME_KEYS=new Set(["child_share","teen_share","youth_share","youth_gap","overall_gap","aging_rate","median_age"]);
 // 지표별 제목(t)·부제(d)
@@ -258,6 +269,8 @@ function updateTitle(){
     sub.html(`x=청년(20–39) 인구비율 · y=성별격차 · 원=총인구 · 색=수도권/지방 · ${src} 2026년 6월`); return; }
   if(viewMode==="bivariate"){ h1.text("청년 인구비율 × 성별격차 · 이변량 지도");
     sub.html(`청년 인구비율(↑) × 성별격차(여초→남초) · ${src} 2026년 6월`); return; }
+  if(current==="cluster"){ h1.text("시군구 인구변화 유형 (군집)");
+    sub.html(`0–9세·20대·30대 10년 변화율(2016→2026)로 나눈 5개 유형 · ${src} 2026년 6월`); return; }
   const t=TITLES[current]||{t:IND[current].label,d:""}, isChg=current.indexOf("chg")===0, ta=TIME_KEYS.has(current);
   if(base2016 && ta){
     h1.text("시군구별 "+t.t+` · 2016→${year} 증감`);
@@ -300,7 +313,7 @@ function rewind(g){
   });
 }
 
-d3.json("sigungu_pop.geojson?v=20260718c").then(g=>{
+d3.json("sigungu_pop.geojson?v=20260718d").then(g=>{
   rewind(g);
   geo=g; feats=g.features.filter(f=>f.properties.total);
   natBands={m:BANDS.map(()=>0),f:BANDS.map(()=>0)};
@@ -377,7 +390,7 @@ function colorScale(key){
 function render(){
   updateYearCtl(); updateTitle(); drawTimeline();
   if(viewMode==="scatter"){ drawScatter(); drawScatterLegend(); return; }
-  const key=current, biv=viewMode==="bivariate", col=colorScale(key);
+  const key=current, biv=viewMode==="bivariate", col=(biv||key==="cluster")?null:colorScale(key);
   const sel=gRegions.selectAll("path.region").data(feats,d=>d.properties.code||d.properties.name+d.properties.sido);
   sel.join(
     enter=>enter.append("path").attr("class","region")
@@ -385,11 +398,11 @@ function render(){
       .on("click",(e,d)=>{e.stopPropagation();selected=d;render();showDetail(d);}),
     u=>u, x=>x.remove())
     .attr("d",path)
-    .attr("fill",d=> biv?bivColor(d):col(mval(d,key)))
+    .attr("fill",d=> biv?bivColor(d): key==="cluster"?(d.properties.cluster!=null?CLUSTER_PAL[d.properties.cluster]:"#e5e7eb") : col(mval(d,key)))
     .classed("sel",d=>d===selected);
   // 시도(도) 경계를 진하게
   gSido.selectAll("path").data(sidoMesh?[sidoMesh]:[]).join("path").attr("class","sido-line").attr("d",path);
-  if(biv) drawBivarLegend(); else drawLegend();
+  if(biv) drawBivarLegend(); else if(key==="cluster") drawClusterLegend(); else drawLegend();
 }
 function paintFills(animate){
   const col=colorScale(current);
@@ -550,6 +563,12 @@ function onHover(e,d){
       .html(`<b>${p.sido} ${p.name}</b><div class="ts">청년비율 ${fmt1(p.youth_share)}% · 성별격차 ${fmtGap(p.youth_gap)}${p.youth_gap!=null?" "+gapDir(p.youth_gap):""}</div>`);
     return;
   }
+  if(current==="cluster"){
+    const ci=p.cluster;
+    tip.style("opacity",1).style("left",(e.clientX+14)+"px").style("top",(e.clientY+12)+"px")
+      .html(`<b>${p.sido} ${p.name}</b><div class="tv" style="color:${ci!=null?CLUSTER_PAL[ci]:'#ccc'}">${ci!=null?CLUSTER_NAMES[ci]:'–'}</div><div class="ts">${ci!=null?CLUSTER_DESC[ci]:''}</div>`);
+    return;
+  }
   const c=IND[current], v=mval(d,current);
   let val, sub;
   if(base2016 && TIME_KEYS.has(current)){
@@ -638,6 +657,18 @@ function drawLegend(){
   }
 }
 
+function drawClusterLegend(){
+  const el=d3.select("#legend"); el.html("");
+  const counts=[0,0,0,0,0]; feats.forEach(f=>{ if(f.properties.cluster!=null) counts[f.properties.cluster]++; });
+  const w=el.append("div").attr("class","clusterleg");
+  CLUSTER_NAMES.forEach((nm,i)=>{
+    const row=w.append("div").attr("class","clrow");
+    row.append("i").style("background",CLUSTER_PAL[i]);
+    const t=row.append("div").attr("class","cltext");
+    t.append("div").attr("class","clnm").html(`${nm} <span>${counts[i]}곳</span>`);
+    t.append("div").attr("class","cldesc").text(CLUSTER_DESC[i]);
+  });
+}
 // ---------- segmented control ----------
 function buildSeg(){
   const seg=d3.select("#seg"); seg.html("");
