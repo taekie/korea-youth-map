@@ -93,6 +93,8 @@ header.top .sub b{color:var(--ink);font-weight:600;}
 .legend .lcap{display:flex;justify-content:space-between;font-size:11px;color:var(--ink);margin-top:3px;font-weight:600;}
 .avgmark{position:absolute;top:-3px;bottom:-3px;width:2px;background:#0f172a;transform:translateX(-1px);border-radius:1px;}
 .avgmark::after{content:"";position:absolute;left:50%;top:-5px;transform:translateX(-50%);border-left:3.5px solid transparent;border-right:3.5px solid transparent;border-top:5px solid #0f172a;}
+.chkrow{display:flex;flex-wrap:wrap;gap:7px 16px;margin-top:10px;}
+.chkrow .avgchk{margin-top:0;}
 .avgchk{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:11.5px;color:var(--muted);cursor:pointer;user-select:none;}
 .avgchk input{accent-color:var(--accent);width:14px;height:14px;cursor:pointer;margin:0;flex:0 0 auto;}
 .avgchk b{color:var(--ink);font-weight:700;}
@@ -170,9 +172,9 @@ header.top .sub b{color:var(--ink);font-weight:600;}
     <aside class="side">
       <div class="scroll">
         <div class="viewtabs" id="viewtabs"></div>
+        <div class="seg" id="seg"></div>
         <div id="globalyear"></div>
         <div id="timeline"></div>
-        <div class="seg" id="seg"></div>
         <div class="legend" id="legend"></div>
         <div class="searchbox">
           <input id="search" list="rlist" placeholder="시군구 검색 (예: 화천군, 강남구)" autocomplete="off"/>
@@ -228,20 +230,13 @@ const IND={
   ts_gap:{label:"성별격차", kind:"div", dom:[-20,0,20], interp:d3.interpolateRdBu, flip:true, ts:true,
     tsval:(ym,yf,ym0,yf0)=>(ym+yf)?(ym-yf)/(ym+yf)*100:null, unit:"%p", fmt:fmtGap, capL:"여초", capR:"남초",
     ticks:[-20,-10,0,10,20], tickfmt:v=>v===0?"0":Math.abs(v)},
-  ts_fidx:{label:"청년 여성 지수", kind:"div", dom:[60,100,140], interp:d3.interpolateRdBu, ts:true,
-    tsval:(ym,yf,ym0,yf0)=>yf0?yf/yf0*100:null, unit:"", fmt:v=>Math.round(v), capL:"감소", capR:"증가",
-    ticks:[60,80,100,120,140], tickfmt:v=>v},
-  ts_pidx:{label:"청년 인구 지수", kind:"div", dom:[60,100,140], interp:d3.interpolateRdBu, ts:true,
-    tsval:(ym,yf,ym0,yf0)=>(ym0+yf0)?(ym+yf)/(ym0+yf0)*100:null, unit:"", fmt:v=>Math.round(v), capL:"감소", capR:"증가",
-    ticks:[60,80,100,120,140], tickfmt:v=>v},
 };
 const GROUPS=[
   {label:null, keys:["child_share","teen_share","youth_share","youth_gap","overall_gap","aging_rate","median_age"]},
   {label:"10년 순변화 (2016→2026)", keys:["chg_youth","chg_youth_f","chg_youth_m","chg_gap"]},
-  {label:"지수 (2016=100)", keys:["ts_fidx","ts_pidx"]},
 ];
 // 연도별 애니메이션 가능한 지표 (전역 연도 슬라이더가 제어)
-const TIME_KEYS=new Set(["child_share","teen_share","youth_share","youth_gap","overall_gap","aging_rate","median_age","ts_fidx","ts_pidx"]);
+const TIME_KEYS=new Set(["child_share","teen_share","youth_share","youth_gap","overall_gap","aging_rate","median_age"]);
 // 지표별 제목(t)·부제(d)
 const TITLES={
   child_share:{t:"0–9세 인구비율", d:"총인구 대비 0–9세 비율 (%)"},
@@ -255,8 +250,6 @@ const TITLES={
   chg_youth_f:{t:"청년 여성 10년 변화", d:"2016 대비 2026 청년 여성 증감률 (%)"},
   chg_youth_m:{t:"청년 남성 10년 변화", d:"2016 대비 2026 청년 남성 증감률 (%)"},
   chg_gap:{t:"청년 성별격차 10년 변화", d:"2016 대비 2026 성별격차 변화 (%p)"},
-  ts_fidx:{t:"청년 여성 지수", d:"2016년=100 기준 청년 여성 인구 지수"},
-  ts_pidx:{t:"청년 인구 지수", d:"2016년=100 기준 청년(20–39) 인구 지수"},
 };
 function updateTitle(){
   const h1=d3.select("header.top h1"), sub=d3.select("header.top .sub"), src="자료: 행정안전부 주민등록인구";
@@ -265,13 +258,17 @@ function updateTitle(){
   if(viewMode==="bivariate"){ h1.text("청년 인구비율 × 성별격차 · 이변량 지도");
     sub.html(`청년 인구비율(↑) × 성별격차(여초→남초) · ${src} 2026년 6월`); return; }
   const t=TITLES[current]||{t:IND[current].label,d:""}, isChg=current.indexOf("chg")===0, ta=TIME_KEYS.has(current);
+  if(base2016 && ta){
+    h1.text("시군구별 "+t.t+` · 2016→${year} 증감`);
+    sub.html(`2016년 대비 ${year}년 증감 · 파랑=증가 · 빨강=감소 · ${src}`); return;
+  }
   h1.text("시군구별 "+t.t+(ta?` · ${year}년`:""));
   const sy=isChg?"2016 → 2026년 6월":(ta?`${year}년 6월`:"2026년 6월");
   sub.html(`${t.d} · ${src} ${sy}`);
 }
 
 let geo, feats, current="youth_gap", selected=null, natBands=null, sidoMesh=null, natProps=null, avgCenter=false;
-let year=2026, playing=false, playTimer=null;
+let year=2026, playing=false, playTimer=null, base2016=false, DIFF_MAX={};
 // 지표값 접근: 시계열 지표는 현재 연도 값 계산, 그 외는 속성 그대로
 function mval(ft, key){
   const c=IND[key], p=ft.properties;
@@ -280,7 +277,10 @@ function mval(ft, key){
     if(!p.ts_ym||p.ts_ym[i]==null||p.ts_yf[i]==null) return null;
     return c.tsval(p.ts_ym[i],p.ts_yf[i],p.ts_ym[0],p.ts_yf[0]);
   }
-  if(TIME_KEYS.has(key) && p.yr && p.yr[key]) return p.yr[key][year-YEARS[0]];
+  if(TIME_KEYS.has(key) && p.yr && p.yr[key]){
+    const yi=year-YEARS[0], s=p.yr[key];
+    return base2016 ? (s[yi]!=null&&s[0]!=null ? s[yi]-s[0] : null) : s[yi];
+  }
   return p[key];
 }
 const svg=d3.select("#map"), tip=d3.select("#tip");
@@ -319,6 +319,9 @@ d3.json("sigungu_pop.geojson?v=20260718c").then(g=>{
   { const xs=feats.map(f=>f.properties.youth_gap).filter(v=>v!=null).sort(d3.ascending),
         ys=feats.map(f=>f.properties.youth_share).filter(v=>v!=null).sort(d3.ascending);
     bivTh={x:[d3.quantile(xs,1/3),d3.quantile(xs,2/3)], y:[d3.quantile(ys,1/3),d3.quantile(ys,2/3)]}; }
+  TIME_KEYS.forEach(k=>{ let mx=0;
+    feats.forEach(f=>{const s=f.properties.yr&&f.properties.yr[k]; if(s&&s[0]!=null) s.forEach(v=>{ if(v!=null) mx=Math.max(mx,Math.abs(v-s[0])); });});
+    DIFF_MAX[k]=Math.max(1,Math.ceil(mx)); });
   buildSeg(); buildViewTabs(); buildSearch(); setupMap(); render();
   showDetail(null);
   window.addEventListener("resize",()=>{setupMap();render();if(selected)zoomTo(selected,false);});
@@ -340,9 +343,23 @@ function setupMap(){
   }
 }
 
+function effConfig(){
+  const c=IND[current];
+  if(base2016 && TIME_KEYS.has(current)){
+    const D=DIFF_MAX[current]||1;
+    return {kind:"div", dom:[-D,0,D], interp:d3.interpolateRdBu, base2016:true, unit:c.unit,
+      fmt:v=>(v>=0?"+":"−")+fmt1(Math.abs(v))+c.unit, capL:"감소", capR:"증가",
+      ticks:[-D,0,D], tickfmt:v=>(v>0?"+":v<0?"−":"")+Math.abs(v)};
+  }
+  return c;
+}
 function colorScale(key){
   const c=IND[key];
   const avg=(natProps && natProps[key]!=null)?natProps[key]:null;
+  if(base2016 && TIME_KEYS.has(key)){
+    const D=DIFF_MAX[key]||1, s=d3.scaleDiverging(d3.interpolateRdBu).domain([-D,0,D]);
+    return v=>v==null?"#e5e7eb":s(clamp(v,-D,D));
+  }
   if(c.kind==="div"){
     const center=(avgCenter && avg!=null)?avg:c.dom[1];
     const s=d3.scaleDiverging(c.interp).domain([c.dom[0],center,c.dom[2]]);
@@ -408,14 +425,9 @@ function updateYearCtl(){
 let tlX=null,tlY=null,tlNat=null;
 function metricBase(key){
   if(["child_share","teen_share","youth_share","aging_rate","youth_gap","overall_gap"].includes(key)) return 0;
-  if(key==="ts_fidx"||key==="ts_pidx") return 100;
   return null; // 중위연령 등은 베이스라인 없음
 }
-function regionSeries(p,key){
-  if(key==="ts_fidx") return p.ts_yf&&p.ts_yf[0]?p.ts_yf.map(v=>v/p.ts_yf[0]*100):null;
-  if(key==="ts_pidx") return (p.ts_ym&&(p.ts_ym[0]+p.ts_yf[0]))?p.ts_ym.map((v,i)=>(v+p.ts_yf[i])/(p.ts_ym[0]+p.ts_yf[0])*100):null;
-  return p.yr?p.yr[key]:null;
-}
+function regionSeries(p,key){ return p.yr?p.yr[key]:null; }
 function drawTimeline(){
   const el=d3.select("#timeline"); el.html(""); tlX=null;
   if(!(TIME_KEYS.has(current) && viewMode!=="scatter" && geo.nat && geo.nat[current])) return;
@@ -539,6 +551,12 @@ function onHover(e,d){
   }
   const c=IND[current], v=mval(d,current);
   let val, sub;
+  if(base2016 && TIME_KEYS.has(current)){
+    const ec=effConfig(), gc=v>0?"#7cb3ef":v<0?"#f2a0a0":"#cbd5e1";
+    tip.style("opacity",1).style("left",(e.clientX+14)+"px").style("top",(e.clientY+12)+"px")
+      .html(`<b>${p.sido} ${p.name}</b><div class="tv">${c.label} · <span style="color:${gc};font-weight:700">${v==null?"–":ec.fmt(v)}</span></div><div class="ts">2016 → ${year}년 증감</div>`);
+    return;
+  }
   if(c.ts){ // 연도별 애니메이션 지표
     const i=year-YEARS[0], ym=p.ts_ym?p.ts_ym[i]:null, yf=p.ts_yf?p.ts_yf[i]:null;
     const mid=current==="ts_gap"?0:100;
@@ -582,7 +600,7 @@ function zoomTo(d,animate){
 
 // ---------- legend ----------
 function drawLegend(){
-  const c=IND[current], el=d3.select("#legend"); el.html("");
+  const c=effConfig(), el=d3.select("#legend"); el.html("");
   const N=64, col=colorScale(current), flip=!!c.flip;
   let dom;
   if(c.kind==="div") dom=[c.dom[0],c.dom[2]]; else dom=c._ext;
@@ -590,8 +608,8 @@ function drawLegend(){
     const t=i/(N-1), v=flip?dom[1]-t*(dom[1]-dom[0]):dom[0]+t*(dom[1]-dom[0]);
     return `${col(v)} ${Math.round(t*100)}%`;});
   const lbar=el.append("div").attr("class","lbar").style("background",`linear-gradient(90deg,${stops.join(",")})`);
-  // 전국평균 마커
-  const avg = natProps ? natProps[current] : null;
+  // 전국평균 마커 (2016 대비 모드에선 숨김)
+  const avg = (!base2016 && natProps) ? natProps[current] : null;
   if(avg!=null){
     let t = flip ? (dom[1]-avg)/(dom[1]-dom[0]) : (avg-dom[0])/(dom[1]-dom[0]);
     lbar.append("div").attr("class","avgmark").style("left",(Math.max(0,Math.min(1,t))*100)+"%");
@@ -605,11 +623,16 @@ function drawLegend(){
   cap.append("span").style("color",Lc).text("◀ "+Lt);
   cap.append("span").style("color",Rc).text(Rt+" ▶");
   if(c.kind!=="div"){cap.select("span:first-child").style("color","var(--muted)");cap.select("span:last-child").style("color","var(--ink)");}
+  const chkrow=el.append("div").attr("class","chkrow");
   if(avg!=null){
-    const wrap=el.append("label").attr("class","avgchk");
-    wrap.append("input").attr("type","checkbox").property("checked",avgCenter)
-      .on("change",function(){avgCenter=this.checked; render();});
-    wrap.append("span").html(`전국평균 <b>${c.fmt(avg)}</b> 기준`);
+    const w1=chkrow.append("label").attr("class","avgchk");
+    w1.append("input").attr("type","checkbox").property("checked",avgCenter).on("change",function(){avgCenter=this.checked; render();});
+    w1.append("span").html(`전국평균 <b>${c.fmt(avg)}</b> 기준`);
+  }
+  if(TIME_KEYS.has(current)){
+    const w2=chkrow.append("label").attr("class","avgchk");
+    w2.append("input").attr("type","checkbox").property("checked",base2016).on("change",function(){base2016=this.checked; if(base2016)avgCenter=false; render(); if(selected)showDetail(selected);});
+    w2.append("span").html(`<b>2016년 대비</b> 증감`);
   }
 }
 
