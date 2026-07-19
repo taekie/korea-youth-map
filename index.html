@@ -59,7 +59,7 @@ header.top .sub b{color:var(--ink);font-weight:600;}
 .region:hover{stroke:#111827;stroke-width:1.1px;}
 .region.sel{stroke:#111827;stroke-width:1.8px;}
 .sido-line{fill:none;stroke:#334155;stroke-width:1.1px;pointer-events:none;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke;}
-.rlabel{fill:#1f2937;stroke:#fff;paint-order:stroke;stroke-linejoin:round;font-weight:600;text-anchor:middle;dominant-baseline:middle;pointer-events:none;font-family:'KoddiUD OnGothic',sans-serif;}
+.rlabel{fill:#1f293780;font-weight:600;text-anchor:middle;dominant-baseline:middle;pointer-events:none;font-family:'KoddiUD OnGothic',sans-serif;}
 /* sidebar */
 .side{width:360px;flex:0 0 360px;border-left:1px solid var(--line);
   display:flex;flex-direction:column;min-height:0;background:var(--bg);}
@@ -421,7 +421,7 @@ function drawLabels(){
   updateLabels(d3.zoomTransform(svg.node()).k);
 }
 function updateLabels(k){
-  gLabels.selectAll("text.rlabel").attr("font-size",11/k).attr("stroke-width",2.6/k)
+  gLabels.selectAll("text.rlabel").attr("font-size",11/k)
     .style("display",d=>(d._area!=null && d._area*k*k>1300)?null:"none");
 }
 // ---------- 연도별 애니메이션 ----------
