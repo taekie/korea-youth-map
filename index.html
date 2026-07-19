@@ -59,6 +59,7 @@ header.top .sub b{color:var(--ink);font-weight:600;}
 .region:hover{stroke:#111827;stroke-width:1.1px;}
 .region.sel{stroke:#111827;stroke-width:1.8px;}
 .sido-line{fill:none;stroke:#334155;stroke-width:1.1px;pointer-events:none;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke;}
+.rlabel{fill:#1f2937;stroke:#fff;paint-order:stroke;stroke-linejoin:round;font-weight:600;text-anchor:middle;dominant-baseline:middle;pointer-events:none;font-family:'KoddiUD OnGothic',sans-serif;}
 /* sidebar */
 .side{width:360px;flex:0 0 360px;border-left:1px solid var(--line);
   display:flex;flex-direction:column;min-height:0;background:var(--bg);}
@@ -298,7 +299,7 @@ function mval(ft, key){
   return p[key];
 }
 const svg=d3.select("#map"), tip=d3.select("#tip");
-const gAll=svg.append("g"), gRegions=gAll.append("g"), gSido=gAll.append("g"), gScatter=svg.append("g");
+const gAll=svg.append("g"), gRegions=gAll.append("g"), gSido=gAll.append("g"), gLabels=gAll.append("g"), gScatter=svg.append("g");
 let path, proj, zoom, W, H, viewMode="map", bivTh=null;
 
 // fix polygon winding for d3 spherical fill (reverse rings whose feature area > hemisphere)
@@ -348,7 +349,7 @@ function setupMap(){
   proj=d3.geoMercator().fitExtent([[14,14],[W-14,H-14]],geo);
   path=d3.geoPath(proj);
   if(!zoom){
-    zoom=d3.zoom().scaleExtent([1,14]).on("zoom",e=>gAll.attr("transform",e.transform));
+    zoom=d3.zoom().scaleExtent([1,14]).on("zoom",e=>{gAll.attr("transform",e.transform); updateLabels(e.transform.k);});
     svg.call(zoom).on("dblclick.zoom",null);
     svg.on("click",()=>{ if(selected){selected=null;render();showDetail(null);} });
     d3.select("#zin").on("click",()=>svg.transition().duration(250).call(zoom.scaleBy,1.6));
@@ -402,6 +403,7 @@ function render(){
     .classed("sel",d=>d===selected);
   // 시도(도) 경계를 진하게
   gSido.selectAll("path").data(sidoMesh?[sidoMesh]:[]).join("path").attr("class","sido-line").attr("d",path);
+  drawLabels();
   if(biv) drawBivarLegend(); else if(key==="cluster") drawClusterLegend(); else drawLegend();
 }
 function paintFills(animate){
@@ -409,6 +411,18 @@ function paintFills(animate){
   let s=gRegions.selectAll("path.region");
   if(animate) s=s.transition().duration(300);
   s.attr("fill",d=>col(mval(d,current)));
+}
+// ---------- 지명 라벨 (줌 레벨에 따라 표시) ----------
+function drawLabels(){
+  feats.forEach(d=>{ d._c=path.centroid(d); d._area=path.area(d); });
+  gLabels.selectAll("text.rlabel").data(feats,d=>d.properties.code||d.properties.name+d.properties.sido)
+    .join(enter=>enter.append("text").attr("class","rlabel"), u=>u, x=>x.remove())
+    .attr("x",d=>d._c[0]).attr("y",d=>d._c[1]).text(d=>d.properties.name);
+  updateLabels(d3.zoomTransform(svg.node()).k);
+}
+function updateLabels(k){
+  gLabels.selectAll("text.rlabel").attr("font-size",11/k).attr("stroke-width",2.6/k)
+    .style("display",d=>(d._area!=null && d._area*k*k>1300)?null:"none");
 }
 // ---------- 연도별 애니메이션 ----------
 function setYear(y,animate){
