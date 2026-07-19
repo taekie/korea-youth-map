@@ -322,7 +322,7 @@ function rewind(g){
   });
 }
 
-d3.json("sigungu_pop.geojson?v=20260720a").then(g=>{
+d3.json("sigungu_pop.geojson?v=20260720b").then(g=>{
   rewind(g);
   geo=g; feats=g.features.filter(f=>f.properties.total);
   natBands={m:BANDS.map(()=>0),f:BANDS.map(()=>0)};
@@ -439,7 +439,7 @@ function updateLabels(k){
 function setYear(y,animate){
   year=Math.max(YEARS[0],Math.min(YEARS[YEARS.length-1],y));
   d3.select("#yearlbl").text(year); d3.select("#yearslider").property("value",year);
-  paintFills(animate); updateTitle(); moveMarker();
+  paintFills(animate); updateTitle(); moveMarker(); showDetail(selected);
 }
 function stopPlay(){ playing=false; if(playTimer){clearInterval(playTimer);playTimer=null;} d3.select("#playbtn").html("▶"); }
 function togglePlay(){
@@ -780,9 +780,19 @@ function nationalProps(){
 }
 
 // ---------- detail panel + pyramid ----------
+// 선택 연도의 연령·성별 스냅샷 (연도별 배열 있으면 사용, 없으면 2026)
+function yearSnap(p, isNat){
+  const yi=year-YEARS[0];
+  const m = isNat ? ((geo.nat.myr&&geo.nat.myr[yi])||natBands.m) : ((p.myr&&p.myr[yi])||p.m);
+  const f = isNat ? ((geo.nat.fyr&&geo.nat.fyr[yi])||natBands.f) : ((p.fyr&&p.fyr[yi])||p.f);
+  const tot=d3.sum(m)+d3.sum(f), ym=d3.sum(m.slice(4,8)), yf=d3.sum(f.slice(4,8));
+  const old=d3.sum(m.slice(13))+d3.sum(f.slice(13));
+  return {m,f,total:tot, youth_gap:(ym+yf)?(ym-yf)/(ym+yf)*100:null,
+    aging_rate:tot?old/tot*100:null, median_age:medianAge(m,f)};
+}
 function showDetail(d){
   const el=d3.select("#detail"), isNat=!d, p=isNat?natProps:d.properties;
-  const g=p.youth_gap, male=g>=0;
+  const snap=yearSnap(p,isNat), g=snap.youth_gap, male=g>=0;
   const gapC=g>0.3?"#1e5b96":g<-0.3?"#b2182b":"#334155";
   el.html(`
     <h2 class="rname">${p.name}<span class="badge ${male?'m':'f'}">${gapDir(g)}</span></h2>
@@ -790,26 +800,28 @@ function showDetail(d){
     ${p.joblbl?`<div class="rsido" style="margin-top:3px;color:#334155"><b style="color:#157f3b">주요 일자리</b> ${p.joblbl}</div>`:``}
     ${p.jobden!=null?`<div class="rsido" style="margin-top:3px;color:#64748b">일자리밀도 ${p.jobden.toFixed(2)} · 종사자 ${fmtN(p.jobs)}명${p.jobsi?` (${p.jobsi} 전체)`:``}</div>`:``}
     <div class="stats">
-      <div class="stat"><div class="k">총인구</div><div class="v">${fmtN(p.total)}<small>명</small></div></div>
+      <div class="stat"><div class="k">총인구</div><div class="v">${fmtN(snap.total)}<small>명</small></div></div>
       <div class="stat"><div class="k">청년(20–39) 성별격차</div><div class="v" style="color:${gapC}">${fmtGap(g)}<small>${gapDir(g)}</small></div></div>
-      <div class="stat"><div class="k">고령화율(65+)</div><div class="v">${fmt1(p.aging_rate)}<small>%</small></div></div>
-      <div class="stat"><div class="k">중위연령</div><div class="v">${fmt1(p.median_age)}<small>세</small></div></div>
+      <div class="stat"><div class="k">고령화율(65+)</div><div class="v">${fmt1(snap.aging_rate)}<small>%</small></div></div>
+      <div class="stat"><div class="k">중위연령</div><div class="v">${fmt1(snap.median_age)}<small>세</small></div></div>
     </div>
-    <div class="pyr-h"><span class="t">${isNat?"전국 인구 피라미드":"인구 피라미드"}</span>
+    <div class="pyr-h"><span class="t">${isNat?"전국 인구 피라미드":"인구 피라미드"} · ${year}</span>
       <span class="lg"><i style="background:var(--male)"></i>남<i style="background:var(--female)"></i>여${isNat?"":'<span style="margin-left:8px;color:#94a3b8">┈ 전국</span>'}</span></div>
     <svg id="pyramid"></svg>`);
-  drawPyramid(p,isNat);
+  drawPyramid(snap.m,snap.f,isNat);
 }
 
-function drawPyramid(p, isNat){
+function drawPyramid(pm, pf, isNat){
   const cw=(document.querySelector('#detail')||{}).clientWidth||320;
   const w=Math.max(260,cw), gap=30, colw=(w-gap)/2, rowH=13, padT=6, padB=18;
   const h=BANDS.length*rowH+padT+padB;
   const s=d3.select("#pyramid").attr("width",w).attr("height",h);
-  const tot=d3.sum(p.m)+d3.sum(p.f);
-  const mPct=p.m.map(v=>v/tot*100), fPct=p.f.map(v=>v/tot*100);
-  const natTot=d3.sum(natBands.m)+d3.sum(natBands.f);
-  const nmPct=natBands.m.map(v=>v/natTot*100), nfPct=natBands.f.map(v=>v/natTot*100);
+  const yi=year-YEARS[0];
+  const nbM=(geo.nat.myr&&geo.nat.myr[yi])||natBands.m, nbF=(geo.nat.fyr&&geo.nat.fyr[yi])||natBands.f;
+  const tot=d3.sum(pm)+d3.sum(pf);
+  const mPct=pm.map(v=>v/tot*100), fPct=pf.map(v=>v/tot*100);
+  const natTot=d3.sum(nbM)+d3.sum(nbF);
+  const nmPct=nbM.map(v=>v/natTot*100), nfPct=nbF.map(v=>v/natTot*100);
   const maxV=d3.max([...mPct,...fPct,...(isNat?[]:[...nmPct,...nfPct])])*1.05;
   const y=d3.scaleBand().domain(d3.range(BANDS.length).reverse()).range([padT,h-padB]).padding(.18);
   const xL=d3.scaleLinear().domain([0,maxV]).range([colw,0]);
