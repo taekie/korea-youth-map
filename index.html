@@ -245,9 +245,9 @@ const GROUPS=[
   {label:"군집 · 0–9·20대·30대 10년 변화 패턴", keys:["cluster"]},
 ];
 IND.cluster={label:"인구변화 유형", cluster:true, unit:""};
-const CLUSTER_PAL=["#157f3b","#4292c6","#807dba","#a6d96a","#fee08b","#fdae61","#d73027"];
-const CLUSTER_NAMES=["성장·자족(일자리)","성장·베드타운","성장·도심재생","30대 정착·저출산","완만 감소","청년 유출","급속 쇠퇴"];
-const CLUSTER_DESC=["일자리 기반(삼성·공항·청사)","주거·통근 기반(통근)","원도심 재개발","30대 유지, 0–9 급감","전 세대 완만 감소","20대 중심 유출","전 세대 급감(소멸위기)"];
+const CLUSTER_PAL=["#157f3b","#4292c6","#807dba","#a6d96a","#d9ef8b","#fee08b","#fdae61","#d73027"];
+const CLUSTER_NAMES=["성장·자족(일자리)","성장·베드타운","성장·도심재생","30대·산단(남초)","30대 정착·저출산","완만 감소","청년 유출","급속 쇠퇴"];
+const CLUSTER_DESC=["일자리 기반(삼성·공항·청사)","주거·통근 기반(통근)","원도심 재개발","30대 남성 유입(제조·산단)","30대 부부 유지, 0–9 급감","전 세대 완만 감소","20대 중심 유출","전 세대 급감(소멸위기)"];
 // 연도별 애니메이션 가능한 지표 (전역 연도 슬라이더가 제어)
 const TIME_KEYS=new Set(["child_share","teen_share","youth_share","youth_gap","overall_gap","aging_rate","median_age"]);
 // 지표별 제목(t)·부제(d)
@@ -314,7 +314,7 @@ function rewind(g){
   });
 }
 
-d3.json("sigungu_pop.geojson?v=20260719d").then(g=>{
+d3.json("sigungu_pop.geojson?v=20260719e").then(g=>{
   rewind(g);
   geo=g; feats=g.features.filter(f=>f.properties.total);
   natBands={m:BANDS.map(()=>0),f:BANDS.map(()=>0)};
