@@ -238,9 +238,16 @@ const IND={
   ts_gap:{label:"성별격차", kind:"div", dom:[-20,0,20], interp:d3.interpolateRdBu, flip:true, ts:true,
     tsval:(ym,yf,ym0,yf0)=>(ym+yf)?(ym-yf)/(ym+yf)*100:null, unit:"%p", fmt:fmtGap, capL:"여초", capR:"남초",
     ticks:[-20,-10,0,10,20], tickfmt:v=>v===0?"0":Math.abs(v)},
+  so_risk:{label:"소멸위험지수", kind:"thresh",
+    thresh:[0.2,0.5,1.0,1.5],
+    threshCol:["#a50026","#d73027","#fdae61","#fee08b","#1a9850"],
+    threshName:["소멸 고위험","소멸위험 진입","주의","소멸위험 보통","매우 낮음"],
+    threshRange:["0.2 미만","0.2 – 0.5","0.5 – 1.0","1.0 – 1.5","1.5 이상"],
+    unit:"", fmt:v=>v==null?"–":v.toFixed(2), capL:"위험", capR:"안전"},
 };
 const GROUPS=[
   {label:null, keys:["child_share","teen_share","youth_share","youth_gap","overall_gap","aging_rate","median_age"]},
+  {label:"지방소멸위험지수 (20–39세 여성 ÷ 65세+)", keys:["so_risk"]},
   {label:"10년 순변화 (2016→2026)", keys:["chg_youth","chg_youth_f","chg_youth_m","chg_gap"]},
   {label:"군집 · 0–9·20대·30대 10년 변화 패턴", keys:["cluster"]},
 ];
@@ -249,7 +256,7 @@ const CLUSTER_PAL=["#157f3b","#4292c6","#807dba","#a6d96a","#d9ef8b","#fee08b","
 const CLUSTER_NAMES=["성장·자족(일자리)","성장·베드타운","성장·도심재생","30대·산단(남초)","30대 정착·저출산","완만 감소","청년 유출","급속 쇠퇴"];
 const CLUSTER_DESC=["일자리 기반(삼성·공항·청사)","주거·통근 기반(통근)","원도심 재개발","30대 남성 유입(제조·산단)","30대 부부 유지, 0–9 급감","전 세대 완만 감소","20대 중심 유출","전 세대 급감(소멸위기)"];
 // 연도별 애니메이션 가능한 지표 (전역 연도 슬라이더가 제어)
-const TIME_KEYS=new Set(["child_share","teen_share","youth_share","youth_gap","overall_gap","aging_rate","median_age"]);
+const TIME_KEYS=new Set(["child_share","teen_share","youth_share","youth_gap","overall_gap","aging_rate","median_age","so_risk"]);
 // 지표별 제목(t)·부제(d)
 const TITLES={
   child_share:{t:"0–9세 인구비율", d:"총인구 대비 0–9세 비율 (%)"},
@@ -259,6 +266,7 @@ const TITLES={
   overall_gap:{t:"전체 성별격차", d:"남성 점유율 − 여성 점유율 (%p)"},
   aging_rate:{t:"고령화율", d:"총인구 대비 65세 이상 비율 (%)"},
   median_age:{t:"중위연령", d:"인구를 나이순 정렬한 중앙값 (세)"},
+  so_risk:{t:"지방소멸위험지수", d:"20–39세 여성 인구 ÷ 65세 이상 인구 · 1.0 미만 소멸위험, 0.5 미만 위험 진입"},
   chg_youth:{t:"청년 인구 10년 변화", d:"2016 대비 2026 청년(20–39) 인구 증감률 (%)"},
   chg_youth_f:{t:"청년 여성 10년 변화", d:"2016 대비 2026 청년 여성 증감률 (%)"},
   chg_youth_m:{t:"청년 남성 10년 변화", d:"2016 대비 2026 청년 남성 증감률 (%)"},
@@ -314,7 +322,7 @@ function rewind(g){
   });
 }
 
-d3.json("sigungu_pop.geojson?v=20260719g").then(g=>{
+d3.json("sigungu_pop.geojson?v=20260720a").then(g=>{
   rewind(g);
   geo=g; feats=g.features.filter(f=>f.properties.total);
   natBands={m:BANDS.map(()=>0),f:BANDS.map(()=>0)};
@@ -375,6 +383,9 @@ function colorScale(key){
     const D=DIFF_MAX[key]||1, s=d3.scaleDiverging(d3.interpolateRdBu).domain([-D,0,D]);
     return v=>v==null?"#e5e7eb":s(clamp(v,-D,D));
   }
+  if(c.kind==="thresh"){
+    const th=c.thresh, cols=c.threshCol;
+    return v=>v==null?"#e5e7eb":cols[d3.bisect(th,v)];}
   if(c.kind==="div"){
     const center=(avgCenter && avg!=null)?avg:c.dom[1];
     const s=d3.scaleDiverging(c.interp).domain([c.dom[0],center,c.dom[2]]);
@@ -404,7 +415,7 @@ function render(){
   // 시도(도) 경계를 진하게
   gSido.selectAll("path").data(sidoMesh?[sidoMesh]:[]).join("path").attr("class","sido-line").attr("d",path);
   drawLabels();
-  if(biv) drawBivarLegend(); else if(key==="cluster") drawClusterLegend(); else drawLegend();
+  if(biv) drawBivarLegend(); else if(key==="cluster") drawClusterLegend(); else if(key==="so_risk" && !base2016) drawThreshLegend(); else drawLegend();
 }
 function paintFills(animate){
   const col=colorScale(current);
@@ -613,6 +624,15 @@ function onHover(e,d){
   } else {
     const isGap = current==="youth_gap"||current==="overall_gap", isYouth=current==="youth_gap";
     const gc = v>0.3?"#7cb3ef":v<-0.3?"#f2a0a0":"#cbd5e1";
+    if(current==="so_risk"){
+      const tier=v==null?"":IND.so_risk.threshName[d3.bisect(IND.so_risk.thresh,v)];
+      const tc=v==null?"#94a3b8":IND.so_risk.threshCol[d3.bisect(IND.so_risk.thresh,v)];
+      val = v==null?"–":`<span style="color:${tc};font-weight:700">${c.fmt(v)} · ${tier}</span>`;
+      sub = year===2026 ? `20–39세 여성 ${fmtN(p.f[4]+p.f[5]+p.f[6]+p.f[7])} ÷ 65세+ ${fmtN(d3.sum(p.m.slice(13))+d3.sum(p.f.slice(13)))}` : `${year}년 기준`;
+      tip.style("opacity",1).style("left",(e.clientX+14)+"px").style("top",(e.clientY+12)+"px")
+        .html(`<b>${p.sido} ${p.name}</b><div class="tv">${c.label} · ${val}</div><div class="ts">${sub}</div>`);
+      return;
+    }
     val = v==null ? "–"
       : isGap ? `<span style="color:${gc};font-weight:700">${c.fmt(v)} · ${gapDir(v)}</span>`
       : c.fmt(v);
@@ -685,6 +705,25 @@ function drawClusterLegend(){
     t.append("div").attr("class","cldesc").text(CLUSTER_DESC[i]);
   });
 }
+function drawThreshLegend(){
+  const el=d3.select("#legend"); el.html("");
+  const c=IND.so_risk, th=c.thresh, counts=[0,0,0,0,0];
+  feats.forEach(f=>{const v=mval(f,"so_risk"); if(v!=null) counts[d3.bisect(th,v)]++;});
+  const w=el.append("div").attr("class","clusterleg");
+  [4,3,2,1,0].forEach(i=>{
+    const row=w.append("div").attr("class","clrow");
+    row.append("i").style("background",c.threshCol[i]);
+    const t=row.append("div").attr("class","cltext");
+    t.append("div").attr("class","clnm").html(`${c.threshName[i]} <span>${counts[i]}곳</span>`);
+    t.append("div").attr("class","cldesc").text(c.threshRange[i]);
+  });
+  const nat = (geo && geo.nat && geo.nat.so_risk) ? geo.nat.so_risk[year-YEARS[0]] : (natProps?natProps.so_risk:null);
+  if(nat!=null){
+    const tier=c.threshName[d3.bisect(th,nat)];
+    el.append("div").attr("class","lcap").style("margin-top","7px")
+      .append("span").style("color","var(--muted)").html(`전국 ${year} <b style="color:var(--ink)">${nat.toFixed(2)}</b> · ${tier}`);
+  }
+}
 // ---------- segmented control ----------
 function buildSeg(){
   const seg=d3.select("#seg"); seg.html("");
@@ -693,7 +732,7 @@ function buildSeg(){
     const row=seg.append("div").attr("class","seg-row");
     g.keys.forEach(k=>{
       row.append("button").attr("class",k===current?"on":"").text(IND[k].label)
-        .on("click",function(){current=k;
+        .on("click",function(){current=k; if(k==="so_risk") base2016=false;
           seg.selectAll("button").classed("on",false);d3.select(this).classed("on",true);
           render(); if(selected)showDetail(selected);});
     });
@@ -732,6 +771,7 @@ function nationalProps(){
     child_pop:cp, child_share:tot?cp/tot*100:null, teen_pop:tp, teen_share:tot?tp/tot*100:null,
     youth_pop:ym+yf, youth_share:tot?(ym+yf)/tot*100:null,
     aging_rate:tot?old/tot*100:null, median_age:medianAge(m,f),
+    so_risk:old?yf/old:null,
     y16_m:Y16M, y16_f:Y16F,
     chg_youth:(Y16M+Y16F)?(ym+yf-Y16M-Y16F)/(Y16M+Y16F)*100:null,
     chg_youth_m:Y16M?(ym-Y16M)/Y16M*100:null,
