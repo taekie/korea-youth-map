@@ -208,6 +208,8 @@ const YEARS=[2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026];
 // 성별격차(%p) = 남성 점유율 − 여성 점유율 = (남−여)/(남+여)×100. 0 중심 대칭.
 const fmtGap=v=> (v>=0?"+":"−")+fmt1(Math.abs(v))+"%p";
 const gapDir=v=> v>0.3?"남초":v<-0.3?"여초":"균형";
+// 코호트 순유입: CCR을 순증감률(%)로 표시. 1.0=균형, 1.82→+82%(유입), 0.46→−54%(유출)
+const fmtCCR=v=> v==null?"–":(Math.abs(v-1)<0.005?"0%":(v>1?"+":"−")+Math.round(Math.abs(v-1)*100)+"%");
 
 // indicator configs
 const IND={
@@ -244,11 +246,18 @@ const IND={
     threshName:["소멸 고위험","소멸위험 진입","주의","소멸위험 보통","매우 낮음"],
     threshRange:["0.2 미만","0.2 – 0.5","0.5 – 1.0","1.0 – 1.5","1.5 이상"],
     unit:"", fmt:v=>v==null?"–":v.toFixed(2), capL:"위험", capR:"안전"},
+  ccr:{label:"전체", kind:"div", dom:[0.5,1.0,1.5], interp:d3.interpolateRdBu,
+    unit:"", fmt:fmtCCR, capL:"유출", capR:"유입", ticks:[0.5,1.0,1.5], tickfmt:fmtCCR},
+  ccr_m:{label:"남성", kind:"div", dom:[0.5,1.0,1.5], interp:d3.interpolateRdBu,
+    unit:"", fmt:fmtCCR, capL:"유출", capR:"유입", ticks:[0.5,1.0,1.5], tickfmt:fmtCCR},
+  ccr_f:{label:"여성", kind:"div", dom:[0.5,1.0,1.5], interp:d3.interpolateRdBu,
+    unit:"", fmt:fmtCCR, capL:"유출", capR:"유입", ticks:[0.5,1.0,1.5], tickfmt:fmtCCR},
 };
 const GROUPS=[
   {label:null, keys:["child_share","teen_share","youth_share","youth_gap","overall_gap","aging_rate","median_age"]},
   {label:"지방소멸위험지수 (20–39세 여성 ÷ 65세+)", keys:["so_risk"]},
   {label:"10년 순변화 (2016→2026)", keys:["chg_youth","chg_youth_f","chg_youth_m","chg_gap"]},
+  {label:"청년 순유입 · 코호트 (2016 10대→2026 20대)", keys:["ccr","ccr_f","ccr_m"]},
   {label:"군집 · 0–9·20대·30대 10년 변화 패턴", keys:["cluster"]},
 ];
 IND.cluster={label:"인구변화 유형", cluster:true, unit:""};
@@ -271,6 +280,9 @@ const TITLES={
   chg_youth_f:{t:"청년 여성 10년 변화", d:"2016 대비 2026 청년 여성 증감률 (%)"},
   chg_youth_m:{t:"청년 남성 10년 변화", d:"2016 대비 2026 청년 남성 증감률 (%)"},
   chg_gap:{t:"청년 성별격차 10년 변화", d:"2016 대비 2026 성별격차 변화 (%p)"},
+  ccr:{t:"청년 순유입 (코호트)", d:"2016년 10–19세 → 2026년 20–29세 비율 · 파랑=유입 · 빨강=유출 · 균형 0%"},
+  ccr_f:{t:"청년 여성 순유입 (코호트)", d:"2016년 10–19세 여성 → 2026년 20–29세 여성 · 파랑=유입 · 빨강=유출"},
+  ccr_m:{t:"청년 남성 순유입 (코호트)", d:"2016년 10–19세 남성 → 2026년 20–29세 남성 · 파랑=유입 · 빨강=유출 · 접경지 군인 주소 주의"},
 };
 function updateTitle(){
   const h1=d3.select("header.top h1"), sub=d3.select("header.top .sub"), src="자료: 행정안전부 주민등록인구";
@@ -332,7 +344,16 @@ d3.json("sigungu_pop.geojson?v=20260720b").then(g=>{
     q.overall_gap=(q.m_total+q.f_total)?(q.m_total-q.f_total)/(q.m_total+q.f_total)*100:null;
     q.child_pop=d3.sum(q.m.slice(0,2))+d3.sum(q.f.slice(0,2)); q.child_share=q.total?q.child_pop/q.total*100:null;
     q.teen_pop=d3.sum(q.m.slice(2,4))+d3.sum(q.f.slice(2,4)); q.teen_share=q.total?q.teen_pop/q.total*100:null;
-    q.youth_pop=q.youth_m+q.youth_f; q.youth_share=q.total?q.youth_pop/q.total*100:null;});
+    q.youth_pop=q.youth_m+q.youth_f; q.youth_share=q.total?q.youth_pop/q.total*100:null;
+    // 코호트 순유입: 2016 10대(band 2,3) → 2026 20대(band 4,5)
+    if(q.myr && q.fyr){
+      const m16=q.myr[0],f16=q.fyr[0],m26=q.myr[10],f26=q.fyr[10];
+      q._coh16m=m16[2]+m16[3]; q._coh16f=f16[2]+f16[3];
+      q._coh26m=m26[4]+m26[5]; q._coh26f=f26[4]+f26[5];
+      q.ccr  =(q._coh16m+q._coh16f)?(q._coh26m+q._coh26f)/(q._coh16m+q._coh16f):null;
+      q.ccr_m=q._coh16m?q._coh26m/q._coh16m:null;
+      q.ccr_f=q._coh16f?q._coh26f/q._coh16f:null;
+    }});
   // 시도(도) 경계 mesh: 인접 시군구의 시도가 다른 아크 + 외곽선
   try{
     const topo=topojson.topology({s:geo});
@@ -633,6 +654,17 @@ function onHover(e,d){
         .html(`<b>${p.sido} ${p.name}</b><div class="tv">${c.label} · ${val}</div><div class="ts">${sub}</div>`);
       return;
     }
+    if(current==="ccr"||current==="ccr_m"||current==="ccr_f"){
+      const c16=current==="ccr_m"?p._coh16m:current==="ccr_f"?p._coh16f:(p._coh16m+p._coh16f);
+      const c26=current==="ccr_m"?p._coh26m:current==="ccr_f"?p._coh26f:(p._coh26m+p._coh26f);
+      const gc=v>1.005?"#1e5b96":v<0.995?"#b2182b":"#334155", dir=v>1.005?"유입":v<0.995?"유출":"균형";
+      const lbl=current==="ccr_m"?"청년 남성 순유입":current==="ccr_f"?"청년 여성 순유입":"청년 순유입";
+      val=v==null?"–":`<span style="color:${gc};font-weight:700">${c.fmt(v)} · ${dir}</span>`;
+      sub=`2016 10대 ${fmtN(c16)} → 2026 20대 ${fmtN(c26)}`;
+      tip.style("opacity",1).style("left",(e.clientX+14)+"px").style("top",(e.clientY+12)+"px")
+        .html(`<b>${p.sido} ${p.name}</b><div class="tv">${lbl} · ${val}</div><div class="ts">${sub}</div>`);
+      return;
+    }
     val = v==null ? "–"
       : isGap ? `<span style="color:${gc};font-weight:700">${c.fmt(v)} · ${gapDir(v)}</span>`
       : c.fmt(v);
@@ -765,7 +797,13 @@ function nationalProps(){
   const cp=d3.sum(m.slice(0,2))+d3.sum(f.slice(0,2)), tp=d3.sum(m.slice(2,4))+d3.sum(f.slice(2,4));
   let Y16M=0,Y16F=0; feats.forEach(x=>{const q=x.properties; Y16M+=q.y16_m||0; Y16F+=q.y16_f||0;});
   const g26=(ym-yf)/(ym+yf)*100, g16=(Y16M+Y16F)?(Y16M-Y16F)/(Y16M+Y16F)*100:null;
-  return {name:"전국", m, f, youth_m:ym, youth_f:yf, m_total:mt, f_total:ft, total:tot,
+  let ccr=null,ccr_m=null,ccr_f=null;
+  if(geo.nat && geo.nat.myr){
+    const nm16=geo.nat.myr[0],nf16=geo.nat.fyr[0],nm26=geo.nat.myr[10],nf26=geo.nat.fyr[10];
+    const c16m=nm16[2]+nm16[3],c16f=nf16[2]+nf16[3],c26m=nm26[4]+nm26[5],c26f=nf26[4]+nf26[5];
+    ccr=(c16m+c16f)?(c26m+c26f)/(c16m+c16f):null; ccr_m=c16m?c26m/c16m:null; ccr_f=c16f?c26f/c16f:null;
+  }
+  return {name:"전국", m, f, youth_m:ym, youth_f:yf, m_total:mt, f_total:ft, total:tot, ccr, ccr_m, ccr_f,
     youth_gap:(ym+yf)?(ym-yf)/(ym+yf)*100:null,
     overall_gap:(mt+ft)?(mt-ft)/(mt+ft)*100:null,
     child_pop:cp, child_share:tot?cp/tot*100:null, teen_pop:tp, teen_share:tot?tp/tot*100:null,
