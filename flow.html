@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>시군구 인구이동 흐름 지도 · 2025</title>
+<meta name="description" content="2025년 국내인구이동통계 기준, 229개 시군구의 전입·전출 흐름을 곡선 화살표로 보여주는 인터랙티브 지도." />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="시군구 인구 지도" />
+<meta property="og:title" content="시군구 인구이동 흐름 지도" />
+<meta property="og:description" content="어느 지역에서 어디로 이동했나 — 2025년 시군구 간 전입·전출 흐름을 곡선 화살표로." />
+<meta property="og:locale" content="ko_KR" />
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson@3"></script>
+<style>
+@font-face{
+  font-family:'KoddiUD OnGothic';
+  src:url('fonts/KoddiUDOnGothic-Regular.otf') format('opentype');
+  font-weight:400; font-display:swap;
+}
+:root{
+  --bg:#ffffff; --panel:#f8fafc; --ink:#1f2937; --muted:#6b7280;
+  --line:#e5e7eb; --line2:#eef2f6; --accent:#3b82f6;
+  --in:#2f6fd0; --out:#d1483c;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;height:100%;}
+body{
+  font-family:'KoddiUD OnGothic',-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+  color:var(--ink); background:var(--bg);
+  -webkit-font-smoothing:antialiased;
+}
+a{color:var(--accent);}
+.app{display:flex;flex-direction:column;height:100vh;min-height:0;}
+header.top{padding:16px 22px 12px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:flex-start;gap:16px;}
+header.top h1{font-size:19px;margin:0;letter-spacing:-.01em;}
+header.top .sub{font-size:12.5px;color:var(--muted);margin-top:4px;line-height:1.5;}
+header.top .sub b{color:var(--ink);font-weight:600;}
+header.top .navlink{font-size:12px;color:var(--muted);text-decoration:none;border:1px solid var(--line);
+  border-radius:7px;padding:6px 10px;flex:0 0 auto;white-space:nowrap;}
+header.top .navlink:hover{border-color:#cbd5e1;color:var(--ink);}
+.main{flex:1;display:flex;min-height:0;}
+.mapwrap{flex:1;position:relative;min-width:0;background:#fcfcfd;}
+#map{width:100%;height:100%;display:block;}
+.region{fill:#eef2f6;stroke:rgba(255,255,255,.65);stroke-width:.4px;cursor:pointer;vector-effect:non-scaling-stroke;}
+.region:hover{stroke:#111827;stroke-width:1.1px;}
+.region.sel{fill:#1f2937;stroke:#111827;stroke-width:1.6px;}
+.region.peer{fill:#cfe0f5;}
+.region.peer-out{fill:#f5d6d1;}
+.sido-line{fill:none;stroke:#94a3b8;stroke-width:.9px;pointer-events:none;stroke-linejoin:round;vector-effect:non-scaling-stroke;}
+.flow{fill:none;stroke-linecap:round;vector-effect:non-scaling-stroke;pointer-events:none;}
+.flabel{font-size:10.5px;font-weight:600;fill:#374151;text-anchor:middle;dominant-baseline:middle;
+  paint-order:stroke;stroke:#fff;stroke-width:2.6px;stroke-linejoin:round;pointer-events:none;}
+/* sidebar */
+.side{width:360px;flex:0 0 360px;border-left:1px solid var(--line);
+  display:flex;flex-direction:column;min-height:0;background:var(--bg);}
+.side .scroll{overflow-y:auto;padding:16px 18px 24px;}
+.seg{display:flex;flex-direction:column;gap:7px;margin-bottom:14px;}
+.seg-row{display:flex;flex-wrap:wrap;gap:6px;}
+.seg-lbl{font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.03em;margin-top:5px;padding-top:8px;border-top:1px solid var(--line2);}
+.seg button{
+  font-family:inherit;font-size:12px;padding:7px 10px;border:1px solid var(--line);
+  background:#fff;color:var(--muted);border-radius:7px;cursor:pointer;letter-spacing:-.01em;}
+.seg button:hover{border-color:#cbd5e1;color:var(--ink);}
+.seg button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}
+.searchbox{position:relative;margin-bottom:14px;}
+.searchbox input{width:100%;font-family:inherit;font-size:13px;padding:9px 11px;border:1px solid var(--line);
+  border-radius:8px;color:var(--ink);}
+.searchbox input:focus{outline:none;border-color:var(--accent);}
+.panel-title{font-size:11px;color:var(--muted);letter-spacing:.02em;margin:0 0 2px;}
+.rname{font-size:20px;font-weight:700;letter-spacing:-.02em;margin:0;}
+.rsido{font-size:12.5px;color:var(--muted);margin:1px 0 12px;}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;}
+.stat{background:var(--panel);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;}
+.stat .k{font-size:10.5px;color:var(--muted);margin-bottom:3px;}
+.stat .v{font-size:17px;font-weight:700;letter-spacing:-.02em;}
+.stat .v small{font-size:11px;font-weight:500;color:var(--muted);margin-left:2px;}
+.stat.hero{grid-column:1/3;}
+.stat.hero .v{font-size:22px;}
+.flowlist{margin:2px 0 4px;}
+.flowlist .fr{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--line2);}
+.flowlist .fr:last-child{border-bottom:none;}
+.flowlist .rk{font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums;width:15px;flex:0 0 auto;}
+.flowlist .nm{font-size:12.5px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.flowlist .nm span{color:var(--muted);font-size:11px;margin-right:4px;}
+.flowlist .vl{font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums;flex:0 0 auto;}
+.flowlist .pc{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;width:38px;text-align:right;flex:0 0 auto;}
+.bar{height:3px;border-radius:2px;margin-top:2px;}
+.hint{font-size:12px;color:var(--muted);background:var(--panel);border:1px dashed var(--line);
+  border-radius:9px;padding:12px;line-height:1.55;margin-bottom:14px;}
+.legend{margin:4px 0 16px;font-size:11.5px;color:var(--muted);line-height:1.7;}
+.legend i{display:inline-block;width:22px;height:0;vertical-align:middle;margin-right:6px;}
+.foot{font-size:10.5px;color:var(--muted);line-height:1.6;margin-top:16px;padding-top:12px;border-top:1px solid var(--line2);}
+.tip{position:fixed;pointer-events:none;background:rgba(17,24,39,.94);color:#fff;font-size:12px;
+  padding:7px 10px;border-radius:7px;line-height:1.45;opacity:0;transition:opacity .08s;z-index:40;max-width:230px;}
+.tip b{font-weight:700;}
+.tip .tv{font-size:14px;font-weight:700;}
+.tip .ts{color:#cbd5e1;font-size:11px;}
+.zbtns{position:absolute;left:14px;top:14px;display:flex;flex-direction:column;gap:6px;z-index:5;}
+.zbtns button{width:32px;height:32px;border:1px solid var(--line);background:#fff;border-radius:7px;
+  font-size:17px;color:var(--ink);cursor:pointer;line-height:1;box-shadow:0 1px 2px rgba(0,0,0,.04);}
+.zbtns button:hover{border-color:#cbd5e1;background:#f8fafc;}
+@media(max-width:860px){
+  .main{flex-direction:column;}
+  .side{width:100%;flex:0 0 auto;border-left:none;border-top:1px solid var(--line);max-height:52vh;}
+  .mapwrap{min-height:44vh;}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div>
+      <h1 id="h1">시군구 인구이동 흐름 · 2025</h1>
+      <div class="sub" id="sub">지역을 클릭하면 그곳으로 <b>들어온 사람들의 출발지</b>를 곡선으로 표시합니다 · 자료: 국가데이터처 국내인구이동통계 2025년</div>
+    </div>
+    <a class="navlink" href="index.html">← 인구 지도</a>
+  </header>
+  <div class="main">
+    <div class="mapwrap">
+      <div class="zbtns"><button id="zin" title="확대">+</button><button id="zout" title="축소">−</button><button id="zreset" title="전체보기" style="font-size:13px">⤢</button></div>
+      <svg id="map"></svg>
+    </div>
+    <aside class="side">
+      <div class="scroll">
+        <div class="seg" id="seg"></div>
+        <div class="legend" id="legend"></div>
+        <div class="searchbox">
+          <input id="search" list="rlist" placeholder="시군구 검색 (예: 광주광역시 서구, 화성시)" autocomplete="off"/>
+          <datalist id="rlist"></datalist>
+        </div>
+        <div id="detail"></div>
+        <div class="foot">
+          시군구 경계를 넘는 이동만 집계했습니다. 같은 시군구 안에서 동만 옮긴 이동(2025년 209.6만 명)은 제외했고,
+          5명 미만의 흐름도 표시하지 않습니다. 일반구가 있는 시(수원·성남·창원 등)는 통계 기준에 맞춰 시 단위로 합쳤습니다.
+          경계: 통계청 시군구 2018.
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+<div class="tip" id="tip"></div>
+<script>
+const fmt=d3.format(","), pct=v=>d3.format(".1f")(v)+"%";
+let geo, F, nodes=[], byDest=[], bySrc=[], sel=null;
+let dir="in", gender="all", topN=10, crossOnly=false;
+
+const COL={in:"#2f6fd0", out:"#d1483c", n:"#64748b"};
+const svg=d3.select("#map"), tip=d3.select("#tip");
+
+// 화살촉 — markerUnits=userSpaceOnUse 로 선 굵기와 무관하게 크기 고정
+svg.append("defs").html(Object.entries(COL).map(([k,c])=>
+  `<marker id="ah-${k}" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7"
+     markerUnits="userSpaceOnUse" orient="auto"><path d="M0.5,1.5 L9,5 L0.5,8.5 z" fill="${c}"/></marker>`
+).join(""));
+
+const gAll=svg.append("g"), gRegions=gAll.append("g"), gSido=gAll.append("g"),
+      gFlow=gAll.append("g"), gLabels=gAll.append("g");
+let path, proj, zoom, W, H, sidoMesh=null;
+
+// d3 구면 채우기용 폴리곤 winding 보정 (index.html과 동일)
+function rewind(g){
+  g.features.forEach(f=>{
+    if(!f.geometry) return;
+    if(d3.geoArea(f) > 2*Math.PI){
+      const gm=f.geometry;
+      const polys = gm.type==="Polygon"? [gm.coordinates] : gm.type==="MultiPolygon"? gm.coordinates : [];
+      polys.forEach(poly=>poly.forEach(ring=>ring.reverse()));
+    }
+  });
+}
+
+Promise.all([
+  d3.json("sigungu_pop.geojson?v=20260720b"),
+  d3.json("flow_2025.json")
+]).then(([g,f])=>{
+  rewind(g); geo=g; F=f;
+  try{
+    const topo=topojson.topology({s:geo});
+    sidoMesh=topojson.mesh(topo, topo.objects.s, (a,b)=>a===b||a.properties.sido!==b.properties.sido);
+  }catch(err){ console.warn("sido mesh 실패",err); }
+  nodes=F.regions.map((r,i)=>({i, sido:r[0], name:r[1], members:F.members[i]}));
+  // 노드별 유입/유출 인덱스
+  byDest=nodes.map(()=>[]); bySrc=nodes.map(()=>[]);
+  F.flows.forEach(fl=>{ byDest[fl[1]].push(fl); bySrc[fl[0]].push(fl); });
+  nodes.forEach(n=>{
+    n.inSum=d3.sum(byDest[n.i],d=>d[2]); n.outSum=d3.sum(bySrc[n.i],d=>d[2]);
+    n.net=n.inSum-n.outSum;
+    n.pop=d3.sum(n.members,mi=>geo.features[mi].properties.total||0);
+    n.netRate=n.pop? n.net/n.pop*100 : 0;   // 인구 대비 순유입률(%)
+  });
+  buildSeg(); buildSearch(); setupMap(); render(); showDetail(null);
+  window.addEventListener("resize",()=>{setupMap();render();});
+});
+
+function setupMap(){
+  const wrap=document.querySelector(".mapwrap");
+  W=wrap.clientWidth; H=wrap.clientHeight;
+  svg.attr("width",W).attr("height",H);
+  proj=d3.geoMercator().fitExtent([[14,14],[W-14,H-14]],geo);
+  path=d3.geoPath(proj);
+  // 노드 중심 = 소속 폴리곤 centroid의 면적가중 평균
+  nodes.forEach(n=>{
+    let sx=0, sy=0, sa=0;
+    n.members.forEach(mi=>{
+      const ft=geo.features[mi], c=path.centroid(ft), a=path.area(ft);
+      if(isFinite(c[0]) && a>0){ sx+=c[0]*a; sy+=c[1]*a; sa+=a; }
+    });
+    n.xy = sa ? [sx/sa, sy/sa] : path.centroid(geo.features[n.members[0]]);
+  });
+  if(!zoom){
+    zoom=d3.zoom().scaleExtent([1,14]).on("zoom",e=>gAll.attr("transform",e.transform));
+    svg.call(zoom).on("dblclick.zoom",null);
+    svg.on("click",()=>{ if(sel!==null){ sel=null; render(); showDetail(null); } });
+    d3.select("#zin").on("click",()=>svg.transition().duration(250).call(zoom.scaleBy,1.6));
+    d3.select("#zout").on("click",()=>svg.transition().duration(250).call(zoom.scaleBy,1/1.6));
+    d3.select("#zreset").on("click",()=>{
+      sel=null; d3.select("#search").property("value","");
+      svg.call(zoom.transform,d3.zoomIdentity); render(); showDetail(null);
+    });
+  }
+}
+
+// 성별 필터 적용값
+function val(fl){
+  return gender==="all" ? fl[2] : gender==="m" ? fl[3] : fl[2]-fl[3];
+}
+// 상대 지역(유입이면 출발지, 유출이면 도착지)
+const peerOf=fl=>nodes[dir==="in"?fl[0]:fl[1]];
+
+// 선택 지역의 흐름 — 값 큰 순. crossOnly면 같은 시도 안의 이동을 뺀다.
+function flowsOf(i){
+  let list=(dir==="in"?byDest:bySrc)[i];
+  if(crossOnly) list=list.filter(fl=>peerOf(fl).sido!==nodes[i].sido);
+  return list.map(fl=>({fl,v:val(fl)})).filter(d=>d.v>0).sort((a,b)=>b.v-a.v);
+}
+
+// 화면에 그릴 흐름 목록
+function activeFlows(){
+  // 선택 전에는 곡선을 그리지 않는다. 전국 흐름을 한꺼번에 얹으면 서울↔경기가
+  // 압도해 수도권에서 뭉개지고 형태가 읽히지 않는다. 대신 순유입률로 채색한다.
+  if(sel===null) return [];
+  return flowsOf(sel).slice(0,topN);
+}
+
+function render(){
+  const active=activeFlows();
+  const peers=new Set(active.map(({fl})=>sel===null?-1:(dir==="in"?fl[0]:fl[1])));
+
+  // 지역 폴리곤 — 노드 단위로 클래스 부여
+  const featNode=[]; nodes.forEach(n=>n.members.forEach(mi=>featNode[mi]=n.i));
+  const rate=d3.scaleDiverging(d3.interpolateRdBu).domain([-3,0,3]);
+  gRegions.selectAll("path").data(geo.features).join("path")
+    .attr("d",path)
+    .attr("class",(d,i)=>{
+      const ni=featNode[i];
+      if(ni===sel) return "region sel";
+      if(peers.has(ni)) return "region "+(dir==="in"?"peer":"peer-out");
+      return "region";
+    })
+    // CSS 클래스 색을 이기려면 인라인 style 이어야 한다. 선택 시엔 null로 되돌린다.
+    .style("fill",(d,i)=> sel===null ? rate(nodes[featNode[i]].netRate) : null)
+    .on("click",(e,d)=>{ e.stopPropagation(); const i=geo.features.indexOf(d);
+      sel=featNode[i]; render(); showDetail(sel); })
+    .on("mousemove",(e,d)=>{
+      const n=nodes[featNode[geo.features.indexOf(d)]];
+      tip.style("opacity",1).style("left",(e.clientX+14)+"px").style("top",(e.clientY+14)+"px")
+         .html(`<b>${n.sido} ${n.name}</b><div class="tv">순유입 ${n.net>=0?"+":"−"}${fmt(Math.abs(n.net))}</div>`+
+               `<div class="ts">인구 대비 ${n.netRate>=0?"+":"−"}${Math.abs(n.netRate).toFixed(1)}% · `+
+               `유입 ${fmt(n.inSum)} · 유출 ${fmt(n.outSum)}</div>`);
+    })
+    .on("mouseleave",()=>tip.style("opacity",0));
+
+  gSido.selectAll("path").data(sidoMesh?[sidoMesh]:[]).join("path")
+    .attr("class","sido-line").attr("d",path);
+
+  // 곡선 흐름
+  const wmax=d3.max(active,d=>d.v)||1;
+  const wsc=d3.scaleSqrt().domain([0,wmax]).range([0.7,6]);
+  const key = sel===null ? "n" : dir;
+  const color = COL[key];
+
+  gFlow.selectAll("path").data(active,d=>d.fl[0]+"_"+d.fl[1]).join("path")
+    .attr("class","flow")
+    .attr("d",d=>arc(nodes[d.fl[0]].xy, nodes[d.fl[1]].xy))
+    .attr("stroke",color)
+    .attr("stroke-width",d=>wsc(d.v))
+    .attr("stroke-opacity",sel===null?.45:.7)
+    .attr("marker-end",`url(#ah-${key})`);
+
+  // 상대 지역 라벨 — 값 큰 순으로 놓되 이미 놓인 라벨과 겹치면 건너뛴다
+  const placed=[], labels=[];
+  if(sel!==null){
+    for(const {fl,v} of active.slice(0,12)){
+      const n=peerOf(fl), x=n.xy[0], y=n.xy[1]-9;
+      // 10.5px 한글은 글자당 약 10.5px, 숫자·쉼표는 약 5.5px
+      const w=n.name.length*10.5 + String(fmt(v)).length*5.5 + 10;
+      if(placed.some(p=>Math.abs(p.x-x)<(p.w+w)/2 && Math.abs(p.y-y)<14)) continue;
+      placed.push({x,y,w}); labels.push({x,y,t:n.name,v});
+      if(labels.length>=7) break;
+    }
+  }
+  gLabels.selectAll("text").data(labels).join("text")
+    .attr("class","flabel").attr("x",d=>d.x).attr("y",d=>d.y)
+    .text(d=>`${d.t} ${fmt(d.v)}`);
+
+  drawLegend();
+}
+
+// 출발→도착 2차 베지어. 항상 진행방향 왼쪽으로 휘어 겹침을 줄인다.
+function arc(a,b){
+  const dx=b[0]-a[0], dy=b[1]-a[1], L=Math.hypot(dx,dy);
+  if(!L) return null;
+  const k=0.22;                       // 휨 정도
+  const mx=(a[0]+b[0])/2, my=(a[1]+b[1])/2;
+  const cx=mx - dy/L*L*k, cy=my + dx/L*L*k;
+  // 화살촉이 도착지 중심에 파묻히지 않게 끝점을 살짝 당긴다
+  const t=0.94;
+  const ex=(1-t)*(1-t)*a[0]+2*(1-t)*t*cx+t*t*b[0];
+  const ey=(1-t)*(1-t)*a[1]+2*(1-t)*t*cy+t*t*b[1];
+  return `M${a[0]},${a[1]}Q${cx},${cy} ${ex},${ey}`;
+}
+
+function buildSeg(){
+  const seg=d3.select("#seg");
+  seg.html(`
+    <div class="seg-row" id="dirrow"></div>
+    <div class="seg-lbl">성별</div>
+    <div class="seg-row" id="gerow"></div>
+    <div class="seg-lbl">범위</div>
+    <div class="seg-row" id="scoperow"></div>
+    <div class="seg-lbl">표시 개수</div>
+    <div class="seg-row" id="toprow"></div>`);
+  const mk=(sel_,items,cur,fn)=>d3.select(sel_).selectAll("button").data(items).join("button")
+    .attr("class",d=>d.k===cur()?"on":null).text(d=>d.l)
+    .on("click",(e,d)=>{ fn(d.k); buildSeg(); render(); showDetail(sel); });
+  mk("#dirrow",[{k:"in",l:"유입 — 어디서 왔나"},{k:"out",l:"유출 — 어디로 갔나"}],()=>dir,v=>dir=v);
+  mk("#gerow",[{k:"all",l:"전체"},{k:"m",l:"남성"},{k:"f",l:"여성"}],()=>gender,v=>gender=v);
+  mk("#scoperow",[{k:false,l:"전국"},{k:true,l:"같은 시·도 제외"}],()=>crossOnly,v=>crossOnly=v);
+  mk("#toprow",[{k:5,l:"상위 5"},{k:10,l:"상위 10"},{k:20,l:"상위 20"},{k:40,l:"상위 40"}],()=>topN,v=>topN=v);
+  drawLegend();
+}
+
+function drawLegend(){
+  d3.select("#legend").html(sel===null
+    ? `<span style="display:inline-block;width:74px;height:9px;border-radius:2px;vertical-align:middle;margin-right:7px;
+         background:linear-gradient(90deg,${d3.interpolateRdBu(0)},${d3.interpolateRdBu(.5)},${d3.interpolateRdBu(1)})"></span>`+
+      `순유입률 −3% ↔ +3% (인구 대비)`
+    : `<i style="border-top:5px solid ${COL[dir]}"></i>`+
+      `선 굵기 = 이동자 수 · 화살표는 ${dir==="in"?"출발지 → 선택 지역":"선택 지역 → 도착지"}`);
+  d3.select("#sub").html(dir==="in"
+    ? `지역을 클릭하면 그곳으로 <b>들어온 사람들의 출발지</b>를 곡선으로 표시합니다 · 자료: 국가데이터처 국내인구이동통계 2025년`
+    : `지역을 클릭하면 그곳을 <b>떠난 사람들의 목적지</b>를 곡선으로 표시합니다 · 자료: 국가데이터처 국내인구이동통계 2025년`);
+}
+
+function buildSearch(){
+  d3.select("#rlist").selectAll("option").data(nodes).join("option")
+    .attr("value",d=>`${d.sido} ${d.name}`);
+  d3.select("#search").on("change",function(){
+    const v=this.value.trim();
+    const n=nodes.find(d=>`${d.sido} ${d.name}`===v)||nodes.find(d=>d.name===v);
+    if(n){ sel=n.i; render(); showDetail(sel); }
+  });
+}
+
+function showDetail(i){
+  const el=d3.select("#detail");
+  if(i===null){
+    const top=[...nodes].sort((a,b)=>b.net-a.net).slice(0,10);
+    el.html(`<div class="hint">지금은 인구 대비 <b>순유입률</b>로 지도를 칠했습니다.
+      지역을 클릭하면 그곳의 이동 흐름을 곡선으로 보여줍니다.</div>
+      <div class="panel-title">순유입 상위 10곳 (2025)</div>
+      <div class="flowlist" id="netlist"></div>`);
+    d3.select("#netlist").selectAll(".fr").data(top).join("div").attr("class","fr")
+      .html((d,k)=>`<div class="rk">${k+1}</div>
+        <div class="nm"><span>${d.sido}</span>${d.name}</div>
+        <div class="vl" style="color:var(--in)">+${fmt(d.net)}</div>`)
+      .on("click",(e,d)=>{ sel=d.i; render(); showDetail(sel); });
+    return;
+  }
+  const n=nodes[i];
+  const list=flowsOf(i);
+  const tot=d3.sum(list,d=>d.v);
+  const inS=d3.sum(byDest[i],val), outS=d3.sum(bySrc[i],val);
+  const own=d3.sum(list.filter(d=>peerOf(d.fl).sido===n.sido),d=>d.v);
+  const hhi=tot?d3.sum(list,d=>Math.pow(d.v/tot,2))*10000:0;
+  const top3=d3.sum(list.slice(0,3),d=>d.v);
+  const label=dir==="in"?"출발지":"도착지";
+
+  el.html(`
+    <div class="panel-title">${dir==="in"?"이곳으로 들어온 사람들":"이곳을 떠난 사람들"}</div>
+    <h2 class="rname">${n.name}</h2>
+    <div class="rsido">${n.sido}${gender==="all"?"":gender==="m"?" · 남성":" · 여성"}</div>
+    <div class="stats">
+      <div class="stat hero"><div class="k">순유입</div>
+        <div class="v" style="color:${inS-outS>=0?"var(--in)":"var(--out)"}">
+          ${inS-outS>=0?"+":"−"}${fmt(Math.abs(inS-outS))}<small>명</small></div></div>
+      <div class="stat"><div class="k">총 유입</div><div class="v">${fmt(inS)}</div></div>
+      <div class="stat"><div class="k">총 유출</div><div class="v">${fmt(outS)}</div></div>
+      ${crossOnly
+        ? `<div class="stat"><div class="k">타 시·도 ${dir==="in"?"유입":"유출"}</div><div class="v">${fmt(tot)}</div></div>`
+        : `<div class="stat"><div class="k">같은 시·도 비중</div><div class="v">${pct(own/tot*100)}</div></div>`}
+      <div class="stat"><div class="k">상위 3곳 비중</div><div class="v">${pct(top3/tot*100)}</div></div>
+    </div>
+    <div class="panel-title">${crossOnly?"타 시·도 ":""}${label} 상위 ${Math.min(topN,list.length)}곳 · 집중도 HHI ${d3.format(",.0f")(hhi)}</div>
+    <div class="flowlist" id="fl"></div>`);
+
+  const c=COL[dir];
+  d3.select("#fl").selectAll(".fr").data(list.slice(0,topN)).join("div").attr("class","fr")
+    .html((d,k)=>{
+      const m=peerOf(d.fl), p=d.v/tot*100;
+      return `<div class="rk">${k+1}</div>
+        <div class="nm"><span>${m.sido}</span>${m.name}
+          <div class="bar" style="width:${Math.max(2,p*2.2)}%;background:${c}"></div></div>
+        <div class="vl">${fmt(d.v)}</div><div class="pc">${p.toFixed(1)}%</div>`;
+    })
+    .on("click",(e,d)=>{ sel=peerOf(d.fl).i; render(); showDetail(sel); });
+}
+
+</script>
+</body>
+</html>
